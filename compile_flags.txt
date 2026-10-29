@@ -1,0 +1,10 @@
+-std=c23
+-ffreestanding
+-fno-builtin
+-Wall
+-Wextra
+-Werror
+-Iboot
+-Iboot/loader
+-Ikernel/include
+-Ithird_party/fonts

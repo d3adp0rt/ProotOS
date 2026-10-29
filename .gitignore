@@ -1,0 +1,15 @@
+[build]
+build/
+build-*/
+*.o
+*.a
+*.so
+*.iso
+*.img
+*.efi
+*.elf
+*.cpio
+*.map
+compile_commands.json
+.cache/
+.vscode/

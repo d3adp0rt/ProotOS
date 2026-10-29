@@ -1,0 +1,3 @@
+#!/bin/sh
+# Placeholder init for future milestones.
+echo "ProotOS initramfs init"

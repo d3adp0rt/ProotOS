@@ -1,0 +1,4 @@
+ProotOS initramfs
+=================
+
+This archive is unpacked by the kernel into a ramfs in later milestones.
