@@ -3,10 +3,11 @@
 A from-scratch 64-bit operating system for x86_64 UEFI, built as a demo and
 research prototype. Monolithic kernel, own bootloader, own userspace.
 
-**Status: M7d — AHCI + M9c network.** The kernel brings up consoles, IDT, memory,
+**Status: M9d — ppkg + TLS pending.** The kernel brings up consoles, IDT, memory,
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
-`cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, ARP, ICMP ping, DNS and HTTP via `/bin/ping` and `/bin/wget`.
+`cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
+Packages: `/bin/ppkg` installs tar-based `.pk` packages to the VFS; local index and `hello` sample.
 
 ![status](https://img.shields.io/badge/status-M1-blue)
 

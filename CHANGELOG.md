@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **ppkg core**: `/bin/ppkg list|install`, tar-based `.pk` packages, local
+  index at `/var/lib/ppkg/index`, VFS exec fallback so installed programs can
+  run, and a `hello` sample package.
 - **Shell improvements**: command history (8 entries) with Up/Down arrows,
   `history` and `clear` built-ins, extended PS/2 arrow scancodes, and a
   framebuffer cell erase fix.

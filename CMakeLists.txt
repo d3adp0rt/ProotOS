@@ -226,18 +226,18 @@ add_custom_command(
 add_custom_command(
     OUTPUT ${LIBC_DIR}/libc.o
     COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
-        -fno-pie -fno-stack-protector -O2 -Wall -Wextra
+        -fno-pie -fno-stack-protector -O2 -Wall -Wextra -mno-sse -mno-mmx
         -I${CMAKE_SOURCE_DIR}/libc/include
         -c ${CMAKE_SOURCE_DIR}/libc/libc.c -o ${LIBC_DIR}/libc.o
     DEPENDS ${CMAKE_SOURCE_DIR}/libc/libc.c ${CMAKE_SOURCE_DIR}/libc/include/libc.h
     COMMENT "CC [libc] libc.o"
     VERBATIM)
 
-foreach(prog sh echo cat ls rm cp mv ps df ping wget)
+foreach(prog sh echo cat ls rm cp mv ps df ping wget ppkg)
     add_custom_command(
         OUTPUT ${USER_DIR}/${prog}_prog.o
         COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
-            -fno-pie -fno-stack-protector -O2 -Wall -Wextra
+            -fno-pie -fno-stack-protector -O2 -Wall -Wextra -mno-sse -mno-mmx
             -I${CMAKE_SOURCE_DIR}/libc/include
             -c ${CMAKE_SOURCE_DIR}/user/${prog}.c -o ${USER_DIR}/${prog}_prog.o
         DEPENDS ${CMAKE_SOURCE_DIR}/user/${prog}.c ${CMAKE_SOURCE_DIR}/libc/include/libc.h
@@ -282,11 +282,14 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_df ${INITRAMFS_STAGE}/bin/df
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_ping ${INITRAMFS_STAGE}/bin/ping
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_wget ${INITRAMFS_STAGE}/bin/wget
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_ppkg ${INITRAMFS_STAGE}/bin/ppkg
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${INITRAMFS_STAGE}/packages
+    COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/mkpkg.py ${USER_DIR}/hello.elf ${INITRAMFS_STAGE}/packages/hello.pk usr/bin/hello
     COMMAND ${CMAKE_COMMAND} -E copy ${EXT2_IMG} ${INITRAMFS_STAGE}/ext2.img
     DEPENDS ${USER_DIR}/init.elf ${USER_DIR}/hello.elf ${USER_DIR}/bin_sh
             ${USER_DIR}/bin_echo ${USER_DIR}/bin_cat ${USER_DIR}/bin_ls ${USER_DIR}/bin_rm
             ${USER_DIR}/bin_cp ${USER_DIR}/bin_mv ${USER_DIR}/bin_ps ${USER_DIR}/bin_df
-            ${USER_DIR}/bin_ping ${USER_DIR}/bin_wget
+            ${USER_DIR}/bin_ping ${USER_DIR}/bin_wget ${USER_DIR}/bin_ppkg
             ${EXT2_IMG} ${INITRAMFS_FILES}
     COMMENT "STAGE initramfs"
     VERBATIM)

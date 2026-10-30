@@ -7,6 +7,7 @@
 #include "gdt.h"
 #include "initramfs.h"
 #include "timer.h"
+#include "vfs.h"
 
 typedef struct {
     uint8_t e_ident[16];
@@ -167,10 +168,26 @@ int process_exec(struct process *p, const char *name) {
 int process_exec_argv(struct process *p, const char *name, char **argv, int argc) {
     const void *data = 0;
     size_t size = 0;
+    void *vfs_data = 0;
     if (name && name[0] == '/')
         name++;
-    if (!p || initramfs_find(name, &data, &size) != 0)
+    if (!p)
         return -1;
+    if (initramfs_find(name, &data, &size) != 0) {
+        struct vfs_inode *inode = vfs_lookup(name);
+        if (!inode || inode->type != VFS_FILE)
+            return -1;
+        vfs_data = kmalloc((size_t)inode->size);
+        if (!vfs_data)
+            return -1;
+        int r = vfs_read(inode, 0, vfs_data, (size_t)inode->size);
+        if (r < 0) {
+            kfree(vfs_data);
+            return -1;
+        }
+        data = vfs_data;
+        size = (size_t)r;
+    }
 
     struct process tmp = *p;
     tmp.pml4_phys = vmm_create_pml4();
@@ -212,6 +229,7 @@ int process_exec_argv(struct process *p, const char *name, char **argv, int argc
     p->entry = tmp.entry;
     p->user_stack_top = tmp.user_stack_top;
     p->brk = tmp.brk;
+    kfree(vfs_data);
     return 0;
 }
 

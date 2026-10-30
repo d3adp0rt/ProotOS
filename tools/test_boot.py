@@ -49,6 +49,7 @@ def main() -> int:
         "[net] DNS example.com ->",
         "ping 10.0.2.2: reply",
         "wget: ",
+        "ppkg: installed hello",
         "ProotOS shell (M8)",
         "M8 libc + shell + /bin/echo works",
         "Filesystem /:",
