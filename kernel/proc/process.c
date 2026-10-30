@@ -43,8 +43,10 @@ typedef struct {
 #define PF_W 2
 
 static uint32_t g_next_pid = 1;
+static struct process *g_processes;
 
 void process_init(void) {
+    g_processes = 0;
     kprintf("[proc] process layer ready\n");
 }
 
@@ -130,6 +132,13 @@ static void user_entry(void *arg) {
     struct process *p = arg ? arg : cur->proc;
     p->thread = cur;
     cur->proc = p;
+    process_enter_user(p);
+}
+
+void process_enter_user(struct process *p) {
+    struct thread *cur = sched_current();
+    cur->proc = p;
+    p->thread = cur;
     cur->pml4_phys = p->pml4_phys;
     vmm_switch(p->pml4_phys);
     tss_set_rsp0((uint64_t)(uintptr_t)(cur->stack + cur->stack_size));
@@ -151,6 +160,76 @@ static void user_entry(void *arg) {
     __builtin_unreachable();
 }
 
+int process_exec(struct process *p, const char *name) {
+    const void *data = 0;
+    size_t size = 0;
+    if (!p || initramfs_find(name, &data, &size) != 0)
+        return -1;
+
+    struct process tmp = *p;
+    tmp.pml4_phys = vmm_create_pml4();
+    if (!tmp.pml4_phys)
+        return -1;
+    if (elf_load_user(&tmp, data, size) != 0)
+        return -1;
+
+    p->pml4_phys = tmp.pml4_phys;
+    p->entry = tmp.entry;
+    p->user_stack_top = tmp.user_stack_top;
+    p->brk = tmp.brk;
+    return 0;
+}
+
+void process_segfault(void) {
+    process_exit(139);
+}
+
+struct process *process_find(uint32_t pid) {
+    for (struct process *p = g_processes; p; p = p->next_all) {
+        if (p->pid == pid)
+            return p;
+    }
+    return 0;
+}
+
+long process_ptrace(int request, int pid, uint64_t addr, uint64_t data) {
+    struct process *cur = process_current();
+    switch (request) {
+    case 0: /* PTRACE_TRACEME */
+        if (cur)
+            cur->traced = 1;
+        return 0;
+    case 16: { /* PTRACE_ATTACH */
+        struct process *t = process_find((uint32_t)pid);
+        if (!t)
+            return -1;
+        t->traced = 1;
+        return 0;
+    }
+    case 2: { /* PTRACE_PEEKDATA */
+        struct process *t = process_find((uint32_t)pid);
+        if (!t)
+            return -1;
+        uint64_t value = 0;
+        if (user_copy_from(t, &value, addr, sizeof(value)) != 0)
+            return -1;
+        return (long)value;
+    }
+    case 5: { /* PTRACE_POKEDATA */
+        struct process *t = process_find((uint32_t)pid);
+        if (!t)
+            return -1;
+        if (user_copy_to(t, addr, &data, sizeof(data)) != 0)
+            return -1;
+        return 0;
+    }
+    case 7: /* PTRACE_CONT */
+        return 0;
+    default:
+        return -1;
+    }
+}
+
 struct fork_ctx {
     struct process *child;
     uint64_t rip;
@@ -159,7 +238,6 @@ struct fork_ctx {
     uint64_t cs;
     uint64_t ss;
 };
-
 static void fork_child_entry(void *arg) {
     struct fork_ctx *ctx = arg;
     struct thread *cur = sched_current();
@@ -219,6 +297,9 @@ uint32_t process_fork(struct trap_frame *tf) {
 
     child->sibling = parent->children;
     parent->children = child;
+    child->next_all = g_processes;
+    g_processes = child;
+    process_fd_copy(parent, child);
 
     struct fork_ctx *ctx = kzalloc(sizeof(*ctx));
     if (!ctx)
@@ -277,6 +358,8 @@ struct process *process_spawn_init(void) {
     p->pml4_phys = vmm_create_pml4();
     if (!p->pml4_phys)
         return 0;
+    p->next_all = g_processes;
+    g_processes = p;
     p->child_wq.head = 0;
     p->child_wq.lock = (spinlock_t)SPINLOCK_INIT;
 
@@ -301,11 +384,14 @@ void process_exit(int code) {
         kthread_exit();
     p->state = PROC_ZOMBIE;
     p->exit_code = code;
+    for (int i = 0; i < PROC_MAX_FDS; i++)
+        process_close_fd(i);
     if (p->parent)
         wait_queue_wake_all(&p->parent->child_wq);
     kprintf("[proc] pid=%u exited with %d\n", p->pid, code);
     if (!p->parent) {
-        kprintf("\nM5 complete: user mode, int 0x80 syscalls, ELF64 loader, fork/wait.\n");
+        kprintf("\nM5 complete: user mode, int 0x80 syscalls, ELF64 loader, fork/execve/wait, "
+                "pipes.\n");
     }
     kthread_exit();
 }

@@ -8,8 +8,8 @@ research prototype. Monolithic kernel, own bootloader, own userspace.
 services and jumps into the higher-half kernel. The kernel brings up
 serial/framebuffer consoles, IDT, buddy/slab/vmalloc, ACPI MADT, LAPIC/IOAPIC,
 PIC/PIT timer, RTC, boots all application processors, runs an EEVDF scheduler,
-and executes a static ELF64 `/init` in ring 3 with `int 0x80` syscalls,
-per-process page tables, fork (deep copy) and wait4.
+and executes static ELF64 programs in ring 3 with `int 0x80` syscalls,
+per-process page tables, fork/execve/wait4, pipes and user-fault termination.
 
 ![status](https://img.shields.io/badge/status-M1-blue)
 

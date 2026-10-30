@@ -35,8 +35,8 @@ def main() -> int:
         "[smp] online CPUs: 4/4",
         "[ktest] M4 scheduler tests: PASS",
         "Hello from ProotOS user mode!",
-        "child: fork returned 0",
-        "parent: wait4 returned",
+        "hello from execve!",
+        "parent: wait4 returned after execve",
         "M5 complete",
     ]
     missing = [line for line in required if line not in out]

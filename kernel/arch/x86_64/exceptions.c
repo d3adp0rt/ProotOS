@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "kernel.h"
+#include "proc.h"
 
 static const char *exception_names[32] = {"divide error",
                                           "debug",
@@ -59,6 +60,11 @@ void exception_dispatch(struct trap_frame *tf) {
     kprintf("  RSI=%p RDI=%p RBP=%p\n", (void *)tf->rsi, (void *)tf->rdi, (void *)tf->rbp);
     if (tf->vector == 14) {
         kprintf("  CR2=%p (faulting address)\n", (void *)read_cr2());
+    }
+    if ((tf->cs & 3) == 3) {
+        int code = (tf->vector == 14) ? 139 : (int)(128 + tf->vector);
+        kprintf("[proc] user-mode exception -> signal %d\n", code - 128);
+        process_exit(code);
     }
     panic("unrecoverable CPU exception %llu", (unsigned long long)tf->vector);
 }

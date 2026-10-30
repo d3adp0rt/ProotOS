@@ -1,6 +1,6 @@
 /*
- * ProotOS — minimal user-mode init program (M5).
- * Syscalls: write=1, getpid=2, fork=57, exit=60, wait4=61 via int 0x80.
+ * ProotOS — minimal user-mode init program (M5b).
+ * write=1, fork=57, execve=59, exit=60, wait4=61 via int 0x80.
  */
 .section .text, "ax", @progbits
 .global _start
@@ -36,16 +36,15 @@ _start:
     int $0x80
 
 child:
-    movq $2, %rax
-    int $0x80
-    movq $1, %rax
-    movq $1, %rdi
-    leaq child_msg(%rip), %rsi
-    movq $child_end - child_msg, %rdx
+    movq $59, %rax
+    leaq path(%rip), %rdi
+    xorq %rsi, %rsi
+    xorq %rdx, %rdx
     int $0x80
 
+    /* execve failed */
     movq $60, %rax
-    xorq %rdi, %rdi
+    movq $1, %rdi
     int $0x80
 
 1:
@@ -56,9 +55,8 @@ child:
 hello:
     .ascii "Hello from ProotOS user mode!\n"
 hello_end:
-child_msg:
-    .ascii "child: fork returned 0\n"
-child_end:
 parent_msg:
-    .ascii "parent: wait4 returned\n"
+    .ascii "parent: wait4 returned after execve\n"
 parent_end:
+path:
+    .asciz "hello"

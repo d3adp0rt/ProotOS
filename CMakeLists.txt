@@ -75,6 +75,7 @@ set(KERNEL_C_SOURCES
     kernel/initramfs.c
     kernel/proc/process.c
     kernel/proc/syscall.c
+    kernel/proc/pipe.c
     kernel/lib/string.c
     kernel/lib/serial.c
     kernel/lib/kprintf.c
@@ -190,13 +191,25 @@ add_custom_command(
     COMMENT "LD [user] init.elf"
     VERBATIM)
 
+add_custom_command(
+    OUTPUT ${USER_DIR}/hello.elf
+    COMMAND ${CLANG_EXECUTABLE}
+        -target x86_64-unknown-none-elf -ffreestanding -fno-pie
+        -c ${CMAKE_SOURCE_DIR}/user/hello.S -o ${USER_DIR}/hello.o
+    COMMAND ${LD_LLD_EXECUTABLE}
+        -Ttext=0x400000 -e _start -o ${USER_DIR}/hello.elf ${USER_DIR}/hello.o
+    DEPENDS ${CMAKE_SOURCE_DIR}/user/hello.S
+    COMMENT "LD [user] hello.elf"
+    VERBATIM)
+
 set(INITRAMFS_STAGE ${CMAKE_BINARY_DIR}/initramfs-root)
 add_custom_command(
     OUTPUT ${INITRAMFS_STAGE}/init
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${INITRAMFS_STAGE}
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/initramfs ${INITRAMFS_STAGE}
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/init.elf ${INITRAMFS_STAGE}/init
-    DEPENDS ${USER_DIR}/init.elf ${INITRAMFS_FILES}
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/hello.elf ${INITRAMFS_STAGE}/hello
+    DEPENDS ${USER_DIR}/init.elf ${USER_DIR}/hello.elf ${INITRAMFS_FILES}
     COMMENT "STAGE initramfs"
     VERBATIM)
 

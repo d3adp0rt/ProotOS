@@ -56,7 +56,7 @@ the HHDM.
 | PIC/PIT timer, IRQ, RTC | M3 |
 | SMP AP bring-up | M3 (4/4 in QEMU) |
 | Scheduler / kernel threads | M4 (EEVDF, RT, exclusive) |
-| User mode / processes | M5 (ring 3, fork/wait) |
+| User mode / processes | M5 (ring 3, fork/execve/wait, pipes) |
 | VFS/ext2 | M6 |
 | Drivers | M7 |
 | libc/userspace | M8 |

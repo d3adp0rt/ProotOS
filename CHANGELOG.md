@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M5b process features**: `execve` from initramfs, pipes with blocking
+  read/write and fd inheritance across fork, `close`, user-mode exception
+  termination, `kill(SIGKILL)` self, and a `ptrace` skeleton
+  (TRACEME/ATTACH/PEEKDATA/POKEDATA/CONT).
 - **M5 user mode and processes**: GDT/TSS, ring-3 iretq entry, per-process
   PML4 with shared kernel mappings, ELF64 user loader, user stack, `int 0x80`
   syscall ABI (`write`, `getpid`, `yield`, `sleep_ms`, `fork`, `wait4`, `exit`),
