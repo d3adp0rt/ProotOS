@@ -45,8 +45,8 @@ static int ahci_command(struct ahci_port *port, uint64_t lba, uint16_t count, in
                         uint8_t command, uint64_t buffer_phys) {
     volatile uint32_t *p = port->regs;
     uint8_t *clb = (uint8_t *)PHYS_TO_VIRT(port->clb_phys);
-    uint8_t *fis = (uint8_t *)PHYS_TO_VIRT(port->fis_phys);
     uint8_t *ct = (uint8_t *)PHYS_TO_VIRT(port->ct_phys);
+    uint8_t *fis = ct; /* command FIS lives in the command table at offset 0 */
     memset(clb, 0, 1024);
     memset(ct, 0, 1024);
 
@@ -62,7 +62,7 @@ static int ahci_command(struct ahci_port *port, uint64_t lba, uint16_t count, in
     fis[4] = (uint8_t)lba;
     fis[5] = (uint8_t)(lba >> 8);
     fis[6] = (uint8_t)(lba >> 16);
-    fis[7] = 0x40;
+    fis[7] = (command == 0xec) ? 0x00 : 0x40;
     fis[8] = (uint8_t)(lba >> 24);
     fis[9] = (uint8_t)(lba >> 32);
     fis[10] = (uint8_t)(lba >> 40);
@@ -71,8 +71,8 @@ static int ahci_command(struct ahci_port *port, uint64_t lba, uint16_t count, in
 
     uint8_t *prdt = ct + 0x80;
     *(uint64_t *)(prdt + 0) = buffer_phys;
-    *(uint32_t *)(prdt + 8) = 511; /* 512 bytes */
-    *(uint32_t *)(prdt + 12) = 0;
+    *(uint32_t *)(prdt + 8) = 0;  /* reserved */
+    *(uint32_t *)(prdt + 12) = 511; /* DBC=512-1 */
 
     __asm__ volatile("wbinvd" : : : "memory");
     w32(p, 0x10, 0xffffffff); /* clear IS */

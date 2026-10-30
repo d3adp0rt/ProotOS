@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M7d AHCI**: fixed command FIS placement (command table, not PxFB) and
+  PRDT layout (DBC at offset 12); IDENTIFY, READ/WRITE DMA EXT, ext2 on
+  `/dev/sda`; QEMU runner uses AHCI instead of virtio-blk.
 - **M9a network core**: RTL8139 RX ring (CBR/CAPR, 16-bit register I/O),
   ARP resolution with SLIRP gateway fallback, IPv4/ICMP echo request/reply,
   boot-time ping to 10.0.2.2.

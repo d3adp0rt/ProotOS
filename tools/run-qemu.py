@@ -73,10 +73,7 @@ def main() -> int:
         run_disk = work / "data-run.img"
         if not args.keep_disk or not run_disk.exists():
             shutil.copy2(disk, run_disk)
-        cmd += [
-            "-drive", f"if=none,id=disk,file={run_disk},format=raw",
-            "-device", "virtio-blk-pci,drive=disk,disable-modern=on,disable-legacy=off",
-        ]
+        cmd += ["-drive", f"file={run_disk},format=raw,if=ide,index=0"]
     if args.gdb:
         cmd += ["-s", "-S"]
     if args.headless or not args.gui:
