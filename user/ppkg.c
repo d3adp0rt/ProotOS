@@ -7,6 +7,30 @@ static unsigned oct(const char *p) {
     return v;
 }
 
+static int remove_tar(const char *path) {
+    int fd = open(path, 0, 0);
+    if (fd < 0) return 1;
+    unsigned char h[512];
+    char name[256];
+    while (read(fd, h, 512) == 512) {
+        int all_zero = 1;
+        for (int i = 0; i < 512; i++) if (h[i]) { all_zero = 0; break; }
+        if (all_zero) break;
+        int n = 0;
+        while (n < 255 && h[n]) { name[n] = (char)h[n]; n++; }
+        name[n] = 0;
+        unsigned size = oct((const char *)h + 124);
+        char type = (char)h[156];
+        if (name[0] == 0) break;
+        if (type != '5' && name[0]) unlink(name);
+        unsigned skip = size + ((512 - (size % 512)) % 512);
+        unsigned char tmp[512];
+        while (skip) { unsigned c = skip > sizeof(tmp) ? sizeof(tmp) : skip; if (read(fd,tmp,c)<=0) break; skip -= c; }
+    }
+    close(fd);
+    return 0;
+}
+
 static int extract_tar(const char *path) {
     int fd = open(path, 0, 0);
     if (fd < 0) { printf("ppkg: cannot open %s\n", path); return 1; }
@@ -75,7 +99,7 @@ static int find_pkg(const char *want, char *path, size_t cap) {
 }
 
 int main(int argc, char **argv) {
-    if (argc < 2) { printf("ppkg: usage: ppkg list|install NAME\n"); return 1; }
+    if (argc < 2) { printf("ppkg: usage: ppkg list|search TERM|update|install NAME|remove NAME\n"); return 1; }
     if (strcmp(argv[1], "search") == 0) {
         if (argc < 3) { printf("ppkg: search TERM\n"); return 1; }
         int fd = open("/var/lib/ppkg/index", 0, 0);
@@ -126,6 +150,14 @@ int main(int argc, char **argv) {
         printf("ppkg: installing %s from %s\n", argv[2], path);
         if (extract_tar(path) != 0) return 1;
         printf("ppkg: installed %s\n", argv[2]);
+        return 0;
+    }
+    if (strcmp(argv[1], "remove") == 0) {
+        if (argc < 3) { printf("ppkg: remove NAME\n"); return 1; }
+        char path[256];
+        if (!find_pkg(argv[2], path, sizeof(path))) { printf("ppkg: unknown package %s\n", argv[2]); return 1; }
+        if (remove_tar(path) != 0) return 1;
+        printf("ppkg: removed %s\n", argv[2]);
         return 0;
     }
     printf("ppkg: unknown command %s\n", argv[1]);
