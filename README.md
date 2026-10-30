@@ -9,13 +9,18 @@ keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
 `cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
 Packages: `/bin/ppkg` installs tar-based `.pk` packages to the VFS; local index, `search`, dependency fields and `hello` sample.
 TLS: mbedTLS 2.28 client, TLS 1.2, HTTPS wget (certificate verification currently disabled).
+Disk: AHCI SATA (`/dev/sda`) with virtio-blk fallback.
+
+Known limitations: DHCP is marked ВЕРНУТЬСЯ (static SLIRP config), a second HTTPS
+request per boot may fail X.509 parsing, ppkg remote update is plumbed but not
+enabled in the demo, source builds are a stub until an in-OS compiler exists.
 
 Package repositories:
 - https://github.com/d3adp0rt/prootos-registry
 - https://github.com/d3adp0rt/prootos-packages
 - https://github.com/d3adp0rt/prootos-pkg-hello
 
-![status](https://img.shields.io/badge/status-M1-blue)
+![status](https://img.shields.io/badge/status-M9d-blue)
 
 ## Requirements
 

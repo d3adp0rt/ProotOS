@@ -40,13 +40,6 @@ reliable; a second request can still receive a different chain (Ed25519/RSA-PSS
 or an extension mbedTLS 2.28 cannot parse) and fail X.509 parsing. Next step:
 TLS 1.3/Ed25519-capable stack or a persistent TLS session.
 
-## ВЕРНУТЬСЯ: TLS / HTTPS (old notes)
-
-`wget` supports HTTP/1.0 only. Domains returning 301/302 to `https://`
-(github.com, nexags.com.ru, ...) report `HTTPS redirect requires TLS`.
-Next: port mbedTLS/BearSSL or implement a minimal TLS 1.2/1.3 client over the
-existing TCP path, then add certificate verification.
-
 ## ВЕРНУТЬСЯ: remote ppkg
 
 Repos created: `prootos-registry`, `prootos-packages`, `prootos-pkg-hello`.
@@ -55,8 +48,8 @@ TLS/HTTPS. Registry flow: registry -> packages index -> `.pk` URL.
 
 ## ВЕРНУТЬСЯ: остальное
 
-- UDP/TCP sockets, `ping`/`wget` userspace.
-- TLS (mbedTLS), `ppkg`, package registry.
+- Remote ppkg update + recursive dependencies.
+- TLS multi-session/certificate verification.
 - NVMe, USB xHCI/HID/storage, AC'97 audio.
 - COW fork, full signals/ptrace, `syscall/sysret`.
 - musl port, more coreutils/TUI.
