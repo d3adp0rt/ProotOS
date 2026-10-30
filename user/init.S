@@ -135,6 +135,12 @@ _start:
     movq $ext2_done_end - ext2_done, %rdx
     int $0x80
 
+    movq $59, %rax
+    leaq shell_path(%rip), %rdi
+    xorq %rsi, %rsi
+    xorq %rdx, %rdx
+    int $0x80
+
     movq $169, %rax
     int $0x80
 
@@ -185,6 +191,8 @@ ext2_end:
 ext2_done:
     .ascii "ext2 test done\n"
 ext2_done_end:
+shell_path:
+    .asciz "/bin/sh"
 
 .section .bss, "aw", @nobits
 .align 16

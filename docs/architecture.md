@@ -62,7 +62,8 @@ the HHDM.
 | PCI / virtio-blk | M7a |
 | PS/2 keyboard / ACPI S5 | M7b |
 | rtl8139 / AC'97 / xHCI | M7c |
-| AHCI/NVMe/USB stack | M7d |
+| libc / shell / coreutils | M8 (echo, cat) |
+| TUI / more coreutils | M8b |
 | Drivers | M7 |
 | libc/userspace | M8 |
 | Network/packages | M9 |

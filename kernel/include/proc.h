@@ -62,6 +62,7 @@ struct process *process_current(void);
 uint32_t process_fork(struct trap_frame *tf);
 int process_wait(int pid, uint64_t status_uptr);
 int process_exec(struct process *p, const char *name);
+int process_exec_argv(struct process *p, const char *name, char **argv, int argc);
 void process_enter_user(struct process *p) __attribute__((noreturn));
 void process_segfault(void) __attribute__((noreturn));
 int process_pipe(int out_fds[2]);

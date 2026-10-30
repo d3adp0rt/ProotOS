@@ -161,8 +161,13 @@ void process_enter_user(struct process *p) {
 }
 
 int process_exec(struct process *p, const char *name) {
+    return process_exec_argv(p, name, 0, 0);
+}
+
+int process_exec_argv(struct process *p, const char *name, char **argv, int argc) {
     const void *data = 0;
     size_t size = 0;
+    if (name && name[0] == '/') name++;
     if (!p || initramfs_find(name, &data, &size) != 0)
         return -1;
 
@@ -172,6 +177,28 @@ int process_exec(struct process *p, const char *name) {
         return -1;
     if (elf_load_user(&tmp, data, size) != 0)
         return -1;
+
+    if (argc > 0 && argv) {
+        if (argc > 16) argc = 16;
+        uint64_t ptrs[16];
+        uint64_t sp = tmp.user_stack_top;
+        for (int i = 0; i < argc; i++) {
+            size_t len = strlen(argv[i]);
+            if (len > 127) len = 127;
+            sp -= len + 1;
+            if (user_copy_to(&tmp, sp, argv[i], len + 1) != 0) return -1;
+            ptrs[i] = sp;
+        }
+        sp &= ~7ULL;
+        sp -= (uint64_t)(argc + 3) * 8;
+        uint64_t argc64 = (uint64_t)argc;
+        uint64_t zero = 0;
+        if (user_copy_to(&tmp, sp, &argc64, 8) != 0) return -1;
+        if (user_copy_to(&tmp, sp + 8, ptrs, (size_t)argc * 8) != 0) return -1;
+        if (user_copy_to(&tmp, sp + 8 + (uint64_t)argc * 8, &zero, 8) != 0) return -1;
+        if (user_copy_to(&tmp, sp + 16 + (uint64_t)argc * 8, &zero, 8) != 0) return -1;
+        tmp.user_stack_top = sp;
+    }
 
     p->pml4_phys = tmp.pml4_phys;
     p->entry = tmp.entry;

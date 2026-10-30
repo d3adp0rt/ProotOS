@@ -44,7 +44,9 @@ def main() -> int:
         "ext2 test done",
         "[kbd] PS/2 scancode self-test: PASS",
         "[rtl8139] test TX: PASS",
-        "M7c complete",
+        "ProotOS shell (M8)",
+        "M8 libc + shell + /bin/echo works",
+        "M8 complete: libc, init, shell, echo/cat coreutils.",
     ]
     missing = [line for line in required if line not in out]
     if missing:

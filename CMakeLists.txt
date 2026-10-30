@@ -212,6 +212,46 @@ add_custom_command(
     COMMENT "LD [user] hello.elf"
     VERBATIM)
 
+
+set(LIBC_DIR ${CMAKE_BINARY_DIR}/libc)
+file(MAKE_DIRECTORY ${LIBC_DIR})
+add_custom_command(
+    OUTPUT ${LIBC_DIR}/crt0.o
+    COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
+        -fno-pie -c ${CMAKE_SOURCE_DIR}/libc/crt0.S -o ${LIBC_DIR}/crt0.o
+    DEPENDS ${CMAKE_SOURCE_DIR}/libc/crt0.S
+    COMMENT "AS [libc] crt0.o"
+    VERBATIM)
+add_custom_command(
+    OUTPUT ${LIBC_DIR}/libc.o
+    COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
+        -fno-pie -fno-stack-protector -O2 -Wall -Wextra
+        -I${CMAKE_SOURCE_DIR}/libc/include
+        -c ${CMAKE_SOURCE_DIR}/libc/libc.c -o ${LIBC_DIR}/libc.o
+    DEPENDS ${CMAKE_SOURCE_DIR}/libc/libc.c ${CMAKE_SOURCE_DIR}/libc/include/libc.h
+    COMMENT "CC [libc] libc.o"
+    VERBATIM)
+
+foreach(prog sh echo cat)
+    add_custom_command(
+        OUTPUT ${USER_DIR}/${prog}_prog.o
+        COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
+            -fno-pie -fno-stack-protector -O2 -Wall -Wextra
+            -I${CMAKE_SOURCE_DIR}/libc/include
+            -c ${CMAKE_SOURCE_DIR}/user/${prog}.c -o ${USER_DIR}/${prog}_prog.o
+        DEPENDS ${CMAKE_SOURCE_DIR}/user/${prog}.c ${CMAKE_SOURCE_DIR}/libc/include/libc.h
+        COMMENT "CC [user] ${prog}.c"
+        VERBATIM)
+    add_custom_command(
+        OUTPUT ${USER_DIR}/bin_${prog}
+        COMMAND ${LD_LLD_EXECUTABLE} -Ttext=0x400000 -e _start
+            -o ${USER_DIR}/bin_${prog}
+            ${LIBC_DIR}/crt0.o ${LIBC_DIR}/libc.o ${USER_DIR}/${prog}_prog.o
+        DEPENDS ${LIBC_DIR}/crt0.o ${LIBC_DIR}/libc.o ${USER_DIR}/${prog}_prog.o
+        COMMENT "LD [user] /bin/${prog}"
+        VERBATIM)
+endforeach()
+
 set(INITRAMFS_STAGE ${CMAKE_BINARY_DIR}/initramfs-root)
 set(EXT2_IMG ${CMAKE_BINARY_DIR}/ext2.img)
 add_custom_command(
@@ -229,8 +269,13 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/initramfs ${INITRAMFS_STAGE}
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/init.elf ${INITRAMFS_STAGE}/init
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/hello.elf ${INITRAMFS_STAGE}/hello
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${INITRAMFS_STAGE}/bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_sh ${INITRAMFS_STAGE}/bin/sh
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_echo ${INITRAMFS_STAGE}/bin/echo
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_cat ${INITRAMFS_STAGE}/bin/cat
     COMMAND ${CMAKE_COMMAND} -E copy ${EXT2_IMG} ${INITRAMFS_STAGE}/ext2.img
-    DEPENDS ${USER_DIR}/init.elf ${USER_DIR}/hello.elf ${EXT2_IMG} ${INITRAMFS_FILES}
+    DEPENDS ${USER_DIR}/init.elf ${USER_DIR}/hello.elf ${USER_DIR}/bin_sh
+            ${USER_DIR}/bin_echo ${USER_DIR}/bin_cat ${EXT2_IMG} ${INITRAMFS_FILES}
     COMMENT "STAGE initramfs"
     VERBATIM)
 

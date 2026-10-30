@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M8 libc and shell**: freestanding user libc (syscalls, string, printf,
+  argv-aware execve), `/bin/sh` with line editor and built-ins, `/bin/echo`,
+  `/bin/cat`, initramfs `/bin` staging, and a boot demo exercising fork,
+  execve and argv.
 - **M7c network/device discovery**: RTL8139 PCI NIC (MAC, reset, RX/TX rings,
   TX completion, boot-time TX test), AC'97 and xHCI discovery, NVMe probe.
   QEMU attaches rtl8139, AC'97 and qemu-xhci.

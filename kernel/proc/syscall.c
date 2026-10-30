@@ -89,13 +89,26 @@ static long sys_pipe(struct process *p, uint64_t uptr) {
     return 0;
 }
 
-static long sys_execve(struct process *p, uint64_t upath) {
+static long sys_execve(struct process *p, uint64_t upath, uint64_t uargv) {
     char path[64];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
         return -14;
     path[sizeof(path) - 1] = 0;
-    if (process_exec(p, path) != 0)
-        return -2;
+
+    char *argv[16];
+    int argc = 0;
+    if (uargv) {
+        for (int i = 0; i < 16; i++) {
+            uint64_t ptr = 0;
+            if (user_copy_from(p, &ptr, uargv + (uint64_t)i * 8, 8) != 0) return -14;
+            if (!ptr) break;
+            static char args[16][128];
+            if (user_copy_from(p, args[i], ptr, sizeof(args[i]) - 1) != 0) return -14;
+            args[i][sizeof(args[i]) - 1] = 0;
+            argv[argc++] = args[i];
+        }
+    }
+    if (process_exec_argv(p, path, argv, argc) != 0) return -2;
     process_enter_user(p);
 }
 
@@ -203,7 +216,7 @@ void syscall_dispatch(struct trap_frame *tf) {
         ret = (long)process_fork(tf);
         break;
     case SYS_EXECVE:
-        ret = sys_execve(p, tf->rdi);
+        ret = sys_execve(p, tf->rdi, tf->rsi);
         break;
     case SYS_WAIT4:
         ret = process_wait((int)tf->rdi, tf->rsi);
