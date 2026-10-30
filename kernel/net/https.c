@@ -23,9 +23,17 @@ static int bio_recv(void *ctx, unsigned char *buf, size_t len) {
     return n < 0 ? MBEDTLS_ERR_SSL_WANT_READ : n;
 }
 
+static char g_tls_host[64];
+static uint8_t g_tls_ip[4];
+static int g_tls_cached;
+
 int net_https_get(const char *host, const char *path, char *out, size_t cap) {
     uint8_t ip[4];
-    if (net_dns_query(host, ip) != 0) return -1;
+    if (g_tls_cached && strcmp(host, g_tls_host) == 0) {
+        memcpy(ip, g_tls_ip, 4);
+    } else {
+        if (net_dns_query(host, ip) != 0) return -1;
+    }
     if (tcp_connect(ip, 443) != 0) { kprintf("[https] TCP connect failed\n"); return -1; }
 
     mbedtls_ssl_context ssl;
@@ -55,6 +63,12 @@ int net_https_get(const char *host, const char *path, char *out, size_t cap) {
     mbedtls_ssl_set_bio(&ssl, 0, bio_send, bio_recv, 0);
 
     ret = mbedtls_ssl_handshake(&ssl);
+    if (ret == 0) {
+        strcpy(g_tls_host, host);
+        g_tls_host[sizeof(g_tls_host) - 1] = 0;
+        memcpy(g_tls_ip, ip, 4);
+        g_tls_cached = 1;
+    }
     if (ret != 0) {
         char eb[128];
         mbedtls_strerror(ret, eb, sizeof(eb));
