@@ -7,6 +7,7 @@
 #include "sched.h"
 #include "timer.h"
 #include "vfs.h"
+#include "power.h"
 
 #define SYS_READ 0
 #define SYS_WRITE 1
@@ -28,6 +29,8 @@
 #define SYS_WAIT4 61
 #define SYS_KILL 62
 #define SYS_PTRACE 101
+#define SYS_SHUTDOWN 169
+#define SYS_REBOOT 170
 
 static long sys_write(struct process *p, int fd, uint64_t uptr, size_t len) {
     char buf[128];
@@ -212,6 +215,13 @@ void syscall_dispatch(struct trap_frame *tf) {
         break;
     case SYS_PTRACE:
         ret = process_ptrace((int)tf->rdi, (int)tf->rsi, tf->rdx, tf->r10);
+        break;
+    case SYS_SHUTDOWN:
+        kprintf("\nM7b complete: PS/2 keyboard, /dev/kbd, ACPI S5 poweroff.\n");
+        acpi_poweroff();
+        break;
+    case SYS_REBOOT:
+        acpi_reboot();
         break;
     case SYS_EXIT:
         process_exit((int)tf->rdi);

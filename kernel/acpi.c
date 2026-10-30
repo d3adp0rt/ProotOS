@@ -169,3 +169,23 @@ int acpi_init(uint64_t rsdp_phys, struct acpi_info *out) {
     }
     return 0;
 }
+
+static inline void outb(uint16_t port, uint8_t v) {
+    __asm__ volatile("outb %0, %1" : : "a"(v), "Nd"(port));
+}
+static inline void outw(uint16_t port, uint16_t v) {
+    __asm__ volatile("outw %0, %1" : : "a"(v), "Nd"(port));
+}
+
+void acpi_poweroff(void) {
+    kprintf("[acpi] S5 poweroff\n");
+    outw(0x604, 0x2000);  /* QEMU q35 ACPI PM1a_CNT */
+    outw(0xb004, 0x2000); /* older QEMU */
+    for (;;) __asm__ volatile("cli; hlt");
+}
+
+void acpi_reboot(void) {
+    kprintf("[acpi] reboot\n");
+    outb(0x64, 0xfe);
+    for (;;) __asm__ volatile("cli; hlt");
+}

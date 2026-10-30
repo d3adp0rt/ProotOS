@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M7b PS/2 + power**: scancode set 1 keyboard driver, IRQ1, shift/caps,
+  `/dev/kbd`, scancode self-test, ACPI S5 poweroff and reboot syscalls;
+  user-mode `shutdown` at the end of the demo.
 - **M7a PCI + virtio-blk**: legacy PCI enumeration, virtio-blk I/O BAR driver
   with a 256-entry split virtqueue, 8 MiB disk image, block-device plumbing and
   ext2 mounted from `/dev/vda` at `/mnt`; AHCI/ATA PIO drivers are present as

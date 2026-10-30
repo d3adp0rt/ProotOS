@@ -6,6 +6,7 @@
 #include "timer.h"
 #include "apic.h"
 #include "sched.h"
+#include "keyboard.h"
 
 #define PIC1_CMD 0x20
 #define PIC1_DATA 0x21
@@ -18,12 +19,6 @@ static volatile uint64_t g_ticks;
 
 static inline void outb(uint16_t port, uint8_t value) {
     __asm__ volatile("outb %0, %1" : : "a"(value), "Nd"(port));
-}
-
-static inline uint8_t inb(uint16_t port) {
-    uint8_t value;
-    __asm__ volatile("inb %1, %0" : "=a"(value) : "Nd"(port));
-    return value;
 }
 
 static inline void io_wait(void) {
@@ -47,7 +42,7 @@ static void pic_remap(void) {
     io_wait();
     outb(PIC2_DATA, 0x01);
     io_wait();
-    outb(PIC1_DATA, 0xfe); /* unmask IRQ0 only */
+    outb(PIC1_DATA, 0xfc); /* unmask IRQ0 + IRQ1 */
     outb(PIC2_DATA, 0xff);
 }
 
@@ -85,7 +80,7 @@ void irq_dispatch(struct trap_frame *tf) {
         sched_tick();
         need_resched = sched_need_resched();
     } else if (tf->vector == 33) {
-        (void)inb(0x60); /* drain keyboard, driver arrives in M7 */
+        keyboard_irq();
     } else if (tf->vector != 39 && tf->vector != 47) {
         kprintf("[irq] unexpected vector %llu\n", (unsigned long long)tf->vector);
     }

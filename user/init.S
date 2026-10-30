@@ -135,6 +135,9 @@ _start:
     movq $ext2_done_end - ext2_done, %rdx
     int $0x80
 
+    movq $169, %rax
+    int $0x80
+
     movq $60, %rax
     xorq %rdi, %rdi
     int $0x80

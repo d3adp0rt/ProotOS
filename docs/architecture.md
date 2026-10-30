@@ -60,7 +60,8 @@ the HHDM.
 | VFS/ramfs/FHS | M6a |
 | ext2 rw / mount | M6b |
 | PCI / virtio-blk | M7a |
-| AHCI/NVMe/USB/net/audio | M7b |
+| PS/2 keyboard / ACPI S5 | M7b |
+| AHCI/NVMe/USB/net/audio | M7c |
 | Drivers | M7 |
 | libc/userspace | M8 |
 | Network/packages | M9 |

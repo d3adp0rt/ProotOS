@@ -17,6 +17,7 @@
 #include "ahci.h"
 #include "ata.h"
 #include "virtio_blk.h"
+#include "keyboard.h"
 
 static const char *memory_type_name(uint32_t type) {
     switch (type) {
@@ -173,11 +174,13 @@ void kmain(struct proot_bootinfo *bi) {
         lapic_init(&acpi);
         ioapic_init(&acpi);
         ioapic_unmask(acpi.irq_gsi[0], 32, lapic_id());
+        ioapic_unmask(acpi.irq_gsi[1], 33, lapic_id());
     } else {
         kprintf("[acpi] MADT unavailable, falling back to PIC/PIT only\n");
     }
 
     timer_init();
+    keyboard_init();
     rtc_print();
 
     __asm__ volatile("sti");

@@ -83,6 +83,7 @@ set(KERNEL_C_SOURCES
     kernel/drivers/ahci.c
     kernel/drivers/ata.c
     kernel/drivers/virtio_blk.c
+    kernel/drivers/keyboard.c
     kernel/lib/string.c
     kernel/lib/serial.c
     kernel/lib/kprintf.c

@@ -10,6 +10,7 @@
 #include "ahci.h"
 #include "ata.h"
 #include "virtio_blk.h"
+#include "keyboard.h"
 
 static struct vfs_inode *g_root;
 
@@ -169,6 +170,13 @@ int vfs_read(struct vfs_inode *inode, uint64_t offset, void *buf, size_t len) {
     if (inode->type == VFS_DEV) {
         if (inode->dev == 1)
             return 0; /* console read not implemented */
+        if (inode->dev == 3) {
+            int c = keyboard_getchar();
+            if (c < 0)
+                return 0;
+            *(char *)buf = (char)c;
+            return 1;
+        }
         return 0;
     }
     if (inode->sb && inode->sb->read)
@@ -350,6 +358,9 @@ static void make_dev(void) {
     n = vfs_create("/dev/null", VFS_DEV, 0666);
     if (n)
         n->dev = 2;
+    n = vfs_create("/dev/kbd", VFS_DEV, 0444);
+    if (n)
+        n->dev = 3;
 }
 
 void vfs_init(void) {
