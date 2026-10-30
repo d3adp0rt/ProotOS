@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M9a network core**: RTL8139 RX ring (CBR/CAPR, 16-bit register I/O),
+  ARP resolution with SLIRP gateway fallback, IPv4/ICMP echo request/reply,
+  boot-time ping to 10.0.2.2.
 - **M8b coreutils**: `ls` (readdir syscall), `rm`, `cp`, `mv`, `ps` (process
   list syscall), `df` (statfs), VFS readdir/statfs callbacks for ramfs and
   ext2, and mount/umount syscalls.

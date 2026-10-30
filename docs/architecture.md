@@ -64,6 +64,8 @@ the HHDM.
 | rtl8139 / AC'97 / xHCI | M7c |
 | libc / shell / coreutils | M8 (echo, cat) |
 | ls/rm/cp/mv/ps/df, readdir/statfs | M8b |
+| RTL8139 RX/TX + ARP/ICMP | M9a |
+| DHCP/DNS/UDP/TCP/TLS/ppkg | M9b |
 | Drivers | M7 |
 | libc/userspace | M8 |
 | Network/packages | M9 |

@@ -44,6 +44,7 @@ def main() -> int:
         "ext2 test done",
         "[kbd] PS/2 scancode self-test: PASS",
         "[rtl8139] test TX: PASS",
+        "[net] ICMP echo reply from 10.0.2.2",
         "ProotOS shell (M8)",
         "M8 libc + shell + /bin/echo works",
         "Filesystem /:",
