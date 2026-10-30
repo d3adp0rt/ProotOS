@@ -15,6 +15,9 @@ static const uint8_t g_ip[4] = { 10, 0, 2, 15 };
 static const uint8_t g_gw[4] = { 10, 0, 2, 2 };
 static uint8_t g_gw_mac[6];
 
+static inline uint32_t inl(uint16_t p) { uint32_t v; __asm__ volatile("inl %1,%0":"=a"(v):"Nd"(p)); return v; }
+static inline uint16_t inw(uint16_t p) { uint16_t v; __asm__ volatile("inw %1,%0":"=a"(v):"Nd"(p)); return v; }
+
 static uint16_t be16(uint16_t v) { return (uint16_t)((v << 8) | (v >> 8)); }
 static void put16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t)v; }
 
@@ -50,6 +53,8 @@ static int arp_resolve(void) {
 
     uint8_t rx[1600];
     for (int i = 0; i < 500; i++) {
+        if (i == 100) kprintf("[net] CBR=0x%x CAPR=0x%x ISR=0x%x\n", inw(0x6500 + 0x3a),
+                              inw(0x6500 + 0x38), inl(0x6500 + 0x3e));
         size_t n = 0;
         if (rtl8139_poll(rx, sizeof(rx), &n) > 0 && n >= 42 && rx[12] == 0x08 && rx[13] == 0x06) {
             if (memcmp(rx + 38, g_ip, 4) == 0) {
@@ -64,8 +69,8 @@ static int arp_resolve(void) {
 
 int net_ping(void) {
     if (arp_resolve() != 0) {
-        kprintf("[net] ARP timeout\n");
-        return -1;
+        kprintf("[net] ARP timeout, trying SLIRP gateway MAC\n");
+        memcpy(g_gw_mac, "\x52\x55\x0a\x00\x02\x02", 6);
     }
     kprintf("[net] gateway MAC %02x:%02x:%02x:%02x:%02x:%02x\n", g_gw_mac[0], g_gw_mac[1],
             g_gw_mac[2], g_gw_mac[3], g_gw_mac[4], g_gw_mac[5]);

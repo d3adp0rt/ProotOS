@@ -80,7 +80,9 @@ int rtl8139_init(void) {
     g_tx_index = 0;
     outb(g_io + 0x37, 0x0c); /* TE | RE */
     g_ready = 1;
-    kprintf("[rtl8139] RX/TX enabled\n");
+    kprintf("[rtl8139] RX/TX enabled CR=0x%x RCR=0x%x RBSTART=0x%x CAPR=0x%x CBR=0x%x\n",
+            inb(g_io + 0x37), inl(g_io + 0x44), inl(g_io + 0x30), inl(g_io + 0x38),
+            (unsigned)inl(g_io + 0x3a));
     return 0;
 }
 
@@ -101,7 +103,7 @@ int rtl8139_poll(void *frame, size_t cap, size_t *out_len) {
     if (out_len) *out_len = payload;
     g_capr = (uint16_t)((g_capr + 4 + len + 3) & ~3u);
     if (g_capr >= 8192) g_capr -= 8192;
-    outl(g_io + 0x38, (uint32_t)(g_capr - 16));
+    outl(g_io + 0x38, (uint32_t)g_capr);
     (void)status;
     return 1;
 }
