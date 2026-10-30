@@ -65,7 +65,8 @@ the HHDM.
 | libc / shell / coreutils | M8 (echo, cat) |
 | ls/rm/cp/mv/ps/df, readdir/statfs | M8b |
 | RTL8139 RX/TX + ARP/ICMP | M9a |
-| DHCP/DNS/UDP/TCP/TLS/ppkg | M9b |
+| UDP DNS lookup | M9b |
+| DHCP/TCP/TLS/ppkg | M9c |
 | Drivers | M7 |
 | libc/userspace | M8 |
 | Network/packages | M9 |

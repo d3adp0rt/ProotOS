@@ -35,6 +35,7 @@ def main() -> int:
     ap.add_argument("--timeout", type=float, default=0)
     ap.add_argument("--fresh-vars", action="store_true")
     ap.add_argument("--keep-disk", action="store_true")
+    ap.add_argument("--pcap", default="")
     args = ap.parse_args()
 
     iso = Path(args.iso)
@@ -68,6 +69,8 @@ def main() -> int:
         "-no-reboot",
         "-serial", "stdio",
     ]
+    if args.pcap:
+        cmd += ["-object", f"filter-dump,id=f1,netdev=net0,file={args.pcap}"]
     disk = Path(args.disk)
     if disk.exists():
         run_disk = work / "data-run.img"

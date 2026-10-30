@@ -206,7 +206,11 @@ void kmain(struct proot_bootinfo *bi) {
     kprintf("[time] uptime ticks=%llu (~1 second)\n", (unsigned long long)timer_ticks());
     timer_sleep_ms(10);
     kprintf("[time] uptime ticks=%llu (+10 ms)\n", (unsigned long long)timer_ticks());
-    if (net_ready) net_ping();
+    if (net_ready) {
+        net_ping();
+        uint8_t dip[4];
+        net_dns_query("example.com", dip);
+    }
 
     smp_init(&acpi);
     process_init();

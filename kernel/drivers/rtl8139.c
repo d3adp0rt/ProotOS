@@ -109,7 +109,7 @@ int rtl8139_poll(void *frame, size_t cap, size_t *out_len) {
     if (out_len) *out_len = payload;
     g_capr = (uint16_t)((g_capr + 4 + len + 3) & ~3u);
     if (g_capr >= 8192) g_capr -= 8192;
-    outw(g_io + 0x38, g_capr);
+    outw(g_io + 0x38, (uint16_t)(g_capr - 16));
     (void)status;
     return 1;
 }

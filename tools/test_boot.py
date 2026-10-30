@@ -46,6 +46,7 @@ def main() -> int:
         "[rtl8139] test TX: PASS",
         "[ahci] IDENTIFY: 16384 sectors",
         "[net] ICMP echo reply from 10.0.2.2",
+        "[net] DNS example.com ->",
         "ProotOS shell (M8)",
         "M8 libc + shell + /bin/echo works",
         "Filesystem /:",

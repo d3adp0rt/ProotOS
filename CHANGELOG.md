@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M9b DNS**: UDP DNS query to 10.0.2.3 with compressed-name answer parsing;
+  `example.com` resolves at boot. Fixed RTL8139 CAPR writeback (CAPR-16) so RX
+  continues after the first packet.
 - **M7d AHCI**: fixed command FIS placement (command table, not PxFB) and
   PRDT layout (DBC at offset 12); IDENTIFY, READ/WRITE DMA EXT, ext2 on
   `/dev/sda`; QEMU runner uses AHCI instead of virtio-blk.
