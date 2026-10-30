@@ -217,7 +217,7 @@ void syscall_dispatch(struct trap_frame *tf) {
         ret = process_ptrace((int)tf->rdi, (int)tf->rsi, tf->rdx, tf->r10);
         break;
     case SYS_SHUTDOWN:
-        kprintf("\nM7b complete: PS/2 keyboard, /dev/kbd, ACPI S5 poweroff.\n");
+        kprintf("\nM7c complete: rtl8139 TX, AC'97/xHCI discovery, PS/2, ACPI S5.\n");
         acpi_poweroff();
         break;
     case SYS_REBOOT:

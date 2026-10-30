@@ -61,7 +61,8 @@ the HHDM.
 | ext2 rw / mount | M6b |
 | PCI / virtio-blk | M7a |
 | PS/2 keyboard / ACPI S5 | M7b |
-| AHCI/NVMe/USB/net/audio | M7c |
+| rtl8139 / AC'97 / xHCI | M7c |
+| AHCI/NVMe/USB stack | M7d |
 | Drivers | M7 |
 | libc/userspace | M8 |
 | Network/packages | M9 |

@@ -84,6 +84,8 @@ set(KERNEL_C_SOURCES
     kernel/drivers/ata.c
     kernel/drivers/virtio_blk.c
     kernel/drivers/keyboard.c
+    kernel/drivers/rtl8139.c
+    kernel/drivers/misc.c
     kernel/lib/string.c
     kernel/lib/serial.c
     kernel/lib/kprintf.c

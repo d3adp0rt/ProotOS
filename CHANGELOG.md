@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M7c network/device discovery**: RTL8139 PCI NIC (MAC, reset, RX/TX rings,
+  TX completion, boot-time TX test), AC'97 and xHCI discovery, NVMe probe.
+  QEMU attaches rtl8139, AC'97 and qemu-xhci.
 - **M7b PS/2 + power**: scancode set 1 keyboard driver, IRQ1, shift/caps,
   `/dev/kbd`, scancode self-test, ACPI S5 poweroff and reboot syscalls;
   user-mode `shutdown` at the end of the demo.

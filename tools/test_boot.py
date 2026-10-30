@@ -43,7 +43,8 @@ def main() -> int:
         "ext2 write/read works",
         "ext2 test done",
         "[kbd] PS/2 scancode self-test: PASS",
-        "M7b complete",
+        "[rtl8139] test TX: PASS",
+        "M7c complete",
     ]
     missing = [line for line in required if line not in out]
     if missing:

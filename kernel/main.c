@@ -18,6 +18,8 @@
 #include "ata.h"
 #include "virtio_blk.h"
 #include "keyboard.h"
+#include "rtl8139.h"
+#include "misc.h"
 
 static const char *memory_type_name(uint32_t type) {
     switch (type) {
@@ -164,6 +166,17 @@ void kmain(struct proot_bootinfo *bi) {
     if (!virtio_blk_device()) {
         ata_init();
         if (!ata_device()) ahci_init();
+    }
+    misc_init();
+    if (rtl8139_init() == 0) {
+        static const uint8_t test_frame[60] = {
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x52, 0x54, 0x00, 0x12, 0x34, 0x56,
+            0x08, 0x06, 0x00, 0x01, 0x08, 0x00, 0x06, 0x04, 0x00, 0x01, 0x52, 0x54,
+            0x00, 0x12, 0x34, 0x56, 0x0a, 0x00, 0x02, 0x0f, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x0a, 0x00, 0x02, 0x02,
+        };
+        int rc = rtl8139_send(test_frame, sizeof(test_frame));
+        kprintf("[rtl8139] test TX: %s\n", rc == 0 ? "PASS" : "FAIL");
     }
     vfs_init();
     pmm_dump();
