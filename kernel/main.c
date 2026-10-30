@@ -4,6 +4,10 @@
  */
 #include "kernel.h"
 #include "mm.h"
+#include "acpi.h"
+#include "apic.h"
+#include "timer.h"
+#include "smp.h"
 
 static const char *memory_type_name(uint32_t type) {
     switch (type) {
@@ -146,7 +150,29 @@ void kmain(struct proot_bootinfo *bi) {
     pmm_dump();
     mm_selftest();
 
-    kprintf("\nM2 complete: buddy allocator, slab heap, vmalloc and paging tests are alive.\n");
-    kprintf("Halting. Next milestone: APIC, timers and SMP.\n");
+    struct acpi_info acpi;
+    if (acpi_init(bi->rsdp, &acpi) == 0) {
+        lapic_init(&acpi);
+        ioapic_init(&acpi);
+        ioapic_unmask(acpi.irq_gsi[0], 32, lapic_id());
+    } else {
+        kprintf("[acpi] MADT unavailable, falling back to PIC/PIT only\n");
+    }
+
+    timer_init();
+    rtc_print();
+
+    __asm__ volatile("sti");
+    kprintf("[time] waiting for 1000 timer ticks...\n");
+    timer_sleep_ms(1000);
+    kprintf("[time] uptime ticks=%llu (~1 second)\n", (unsigned long long)timer_ticks());
+    timer_sleep_ms(10);
+    kprintf("[time] uptime ticks=%llu (+10 ms)\n", (unsigned long long)timer_ticks());
+
+    smp_init(&acpi);
+
+    kprintf(
+        "\nM3 complete: ACPI, LAPIC/IOAPIC, PIC/PIT timer, IRQ dispatch, RTC and SMP are alive.\n");
+    kprintf("Halting. Next milestone: EEVDF scheduler and kernel threads.\n");
     cpu_halt();
 }

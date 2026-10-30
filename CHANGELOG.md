@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M3 interrupts, timers and SMP**: ACPI RSDP/XSDT/MADT/HPET parsing, Local
+  APIC and IOAPIC setup, PIC remap, 1 kHz PIT timer with IRQ dispatch, CMOS RTC,
+  spinlocks, INIT-SIPI-SIPI AP bring-up through a 16→32→64-bit trampoline at
+  `0x8000`, 4/4 CPUs online in QEMU.
 - **M2 memory management**: DMA32/Normal buddy allocator with page metadata,
   zone statistics, slab/kmalloc/kfree/krealloc/kzalloc, vmalloc/vfree, kernel
   page-table manager with 4K map/unmap/query, guard-page support and M2

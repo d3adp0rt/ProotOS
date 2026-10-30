@@ -9,6 +9,7 @@ find_program(CLANG_EXECUTABLE clang REQUIRED)
 find_program(LLD_LINK_EXECUTABLE lld-link REQUIRED)
 find_program(LD_LLD_EXECUTABLE ld.lld REQUIRED)
 find_program(PYTHON3_EXECUTABLE python3 REQUIRED)
+find_program(OBJCOPY_EXECUTABLE objcopy REQUIRED)
 
 set(BOOT_OBJ_DIR ${CMAKE_BINARY_DIR}/obj/boot)
 set(KERNEL_OBJ_DIR ${CMAKE_BINARY_DIR}/obj/kernel)
@@ -67,11 +68,16 @@ add_custom_command(
 set(KERNEL_C_SOURCES
     kernel/main.c
     kernel/console.c
+    kernel/acpi.c
+    kernel/smp.c
     kernel/lib/string.c
     kernel/lib/serial.c
     kernel/lib/kprintf.c
     kernel/arch/x86_64/idt.c
     kernel/arch/x86_64/exceptions.c
+    kernel/arch/x86_64/apic.c
+    kernel/arch/x86_64/timer.c
+    kernel/arch/x86_64/rtc.c
     kernel/mm/pmm.c
     kernel/mm/vmm.c
     kernel/mm/kmalloc.c
@@ -81,7 +87,28 @@ set(KERNEL_C_SOURCES
 set(KERNEL_ASM_SOURCES
     kernel/arch/x86_64/entry.S
     kernel/arch/x86_64/isr.S
+    kernel/arch/x86_64/irq.S
+    kernel/arch/x86_64/ap_blob.S
 )
+
+set(TRAMP_DIR ${CMAKE_BINARY_DIR}/obj/tramp)
+file(MAKE_DIRECTORY ${TRAMP_DIR})
+add_custom_command(
+    OUTPUT ${TRAMP_DIR}/ap_trampoline.bin
+    COMMAND ${CLANG_EXECUTABLE}
+        -target x86_64-unknown-none-elf
+        -c ${CMAKE_SOURCE_DIR}/kernel/arch/x86_64/ap_trampoline.S
+        -o ${TRAMP_DIR}/ap_trampoline.o
+    COMMAND ${LD_LLD_EXECUTABLE}
+        -T ${CMAKE_SOURCE_DIR}/kernel/arch/x86_64/ap_trampoline.ld
+        -o ${TRAMP_DIR}/ap_trampoline.elf
+        ${TRAMP_DIR}/ap_trampoline.o
+    COMMAND ${OBJCOPY_EXECUTABLE}
+        -O binary ${TRAMP_DIR}/ap_trampoline.elf ${TRAMP_DIR}/ap_trampoline.bin
+    DEPENDS ${CMAKE_SOURCE_DIR}/kernel/arch/x86_64/ap_trampoline.S
+            ${CMAKE_SOURCE_DIR}/kernel/arch/x86_64/ap_trampoline.ld
+    COMMENT "GEN ap_trampoline.bin"
+    VERBATIM)
 
 file(GLOB_RECURSE KERNEL_HEADERS CONFIGURE_DEPENDS
      ${CMAKE_SOURCE_DIR}/kernel/*.h
@@ -119,8 +146,9 @@ foreach(src IN LISTS KERNEL_ASM_SOURCES)
             -ffreestanding -fno-stack-protector -mno-red-zone
             -mcmodel=kernel -mno-sse -mno-mmx -mno-80387
             -O2 -g
+            -I${TRAMP_DIR}
             -c ${CMAKE_SOURCE_DIR}/${src} -o ${obj}
-        DEPENDS ${CMAKE_SOURCE_DIR}/${src} ${KERNEL_HEADERS}
+        DEPENDS ${CMAKE_SOURCE_DIR}/${src} ${KERNEL_HEADERS} ${TRAMP_DIR}/ap_trampoline.bin
         COMMENT "AS [kernel] ${src}"
         VERBATIM)
     list(APPEND KERNEL_OBJECTS ${obj})

@@ -32,7 +32,8 @@ def main() -> int:
         "ProotOS loader",
         "[prootos] kernel entered",
         "[ktest] M2 memory tests: PASS",
-        "M2 complete",
+        "[smp] online CPUs: 4/4",
+        "M3 complete",
     ]
     missing = [line for line in required if line not in out]
     if missing:

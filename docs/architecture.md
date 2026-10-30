@@ -52,7 +52,9 @@ the HHDM.
 | Physical allocator | M2 |
 | Kernel heap / vmalloc | M2 |
 | VMM (kernel mappings) | M2 |
-| APIC/SMP/timers | M3 |
+| ACPI / LAPIC / IOAPIC | M3 |
+| PIC/PIT timer, IRQ, RTC | M3 |
+| SMP AP bring-up | M3 (4/4 in QEMU) |
 | Scheduler | M4 |
 | Processes/syscalls | M5 |
 | VFS/ext2 | M6 |
