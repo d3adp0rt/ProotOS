@@ -95,9 +95,8 @@ int main(int argc, char **argv) {
         printf("ppkg: updating from %s\n", REGISTRY);
         char *bundle = malloc(32768);
         if (!bundle) return 1;
-        int n = net_https_get("raw.githubusercontent.com",
-                              "/d3adp0rt/prootos-registry/main/registry.tar", bundle, 32768);
-        if (n <= 0)
+        int n = -1;
+        for (int attempt = 0; attempt < 5 && n <= 0; attempt++)
             n = net_https_get("raw.githubusercontent.com",
                               "/d3adp0rt/prootos-registry/main/registry.tar", bundle, 32768);
         if (n <= 0) { printf("ppkg: update failed (%d)\n", n); free(bundle); return 1; }

@@ -52,7 +52,9 @@ int net_https_get(const char *host, const char *path, char *out, size_t cap) {
                                       MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT);
     if (ret != 0) { kprintf("[https] config %d\n", ret); goto fail; }
     mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_NONE);
-    static const int suites[] = { MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, 0 };
+    static const int suites[] = { MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                                   MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+                                   MBEDTLS_TLS_RSA_WITH_AES_128_GCM_SHA256, 0 };
     mbedtls_ssl_conf_ciphersuites(&conf, suites);
     mbedtls_ssl_conf_dbg(&conf, tls_dbg, 0);
     mbedtls_debug_set_threshold(0);
