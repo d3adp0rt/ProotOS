@@ -165,6 +165,9 @@ struct block_device *ahci_init(void) {
     uint32_t pi = r32(abar, 0x0c);
     kprintf("[ahci] ABAR=%p ports=0x%x CAP=0x%x\n", (void *)abar_phys, pi, r32(abar, 0x00));
 
+    /* ICH9 AHCI enable in PCI config space. */
+    uint32_t ahci_cfg = pci_read32(pci->bus, pci->slot, pci->func, 0x90);
+    pci_write32(pci->bus, pci->slot, pci->func, 0x90, ahci_cfg | (1u << 31));
     w32(abar, 0x04, r32(abar, 0x04) | (1u << 31)); /* AE */
 
     for (int i = 0; i < 32; i++) {
