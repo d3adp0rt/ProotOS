@@ -253,3 +253,16 @@ int mount_fs(const char *path, const char *type) {
 int umount_fs(const char *path) {
     return (int)syscall1(12, (long)path);
 }
+
+unsigned inet_addr(const char *s) {
+    unsigned a=0,b=0,c=0,d=0;
+    while (*s >= '0' && *s <= '9') a = a*10 + (unsigned)(*s++ - '0'); if (*s=='.') s++; else return 0;
+    while (*s >= '0' && *s <= '9') b = b*10 + (unsigned)(*s++ - '0'); if (*s=='.') s++; else return 0;
+    while (*s >= '0' && *s <= '9') c = c*10 + (unsigned)(*s++ - '0'); if (*s=='.') s++; else return 0;
+    while (*s >= '0' && *s <= '9') d = d*10 + (unsigned)(*s++ - '0');
+    return (a<<24)|(b<<16)|(c<<8)|d;
+}
+int net_ping_ip(unsigned ip) { return (int)syscall1(81, ip); }
+long net_http_get(const char *host, const char *path, char *buf, size_t cap) {
+    return syscall4(82, (long)host, (long)path, (long)buf, (long)cap);
+}

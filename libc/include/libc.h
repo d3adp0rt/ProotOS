@@ -47,3 +47,6 @@ int readdir(const char *path, unsigned index, char *name, size_t len);
 long getprocs(char *buf, size_t len);
 int mount_fs(const char *path, const char *type);
 int umount_fs(const char *path);
+unsigned inet_addr(const char *s);
+int net_ping_ip(unsigned ip);
+long net_http_get(const char *host, const char *path, char *buf, size_t cap);

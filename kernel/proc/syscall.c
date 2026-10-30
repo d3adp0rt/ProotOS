@@ -7,6 +7,8 @@
 #include "sched.h"
 #include "timer.h"
 #include "vfs.h"
+#include "net.h"
+#include "mm.h"
 #include "power.h"
 
 #define SYS_READ 0
@@ -25,6 +27,8 @@
 #define SYS_READDIR 78
 #define SYS_GETPROCS 79
 #define SYS_STATFS 80
+#define SYS_NET_PING 81
+#define SYS_NET_HTTP 82
 #define SYS_PIPE 22
 #define SYS_FORK 57
 #define SYS_EXECVE 59
@@ -214,6 +218,25 @@ static long sys_statfs(struct process *p, uint64_t upath, uint64_t uout) {
     return 0;
 }
 
+static long sys_net_ping(uint64_t ip) {
+    uint8_t a[4] = { (uint8_t)(ip >> 24), (uint8_t)(ip >> 16), (uint8_t)(ip >> 8), (uint8_t)ip };
+    return net_ping_ip(a);
+}
+
+static long sys_net_http(struct process *p, uint64_t uhost, uint64_t upath, uint64_t uout,
+                         uint64_t cap) {
+    char host[96], path[128];
+    if (user_copy_from(p, host, uhost, sizeof(host) - 1) != 0) return -14;
+    if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0) return -14;
+    host[sizeof(host) - 1] = path[sizeof(path) - 1] = 0;
+    char *buf = kmalloc((size_t)cap);
+    if (!buf) return -1;
+    int n = net_http_get(host, path, buf, (size_t)cap);
+    if (n > 0 && user_copy_to(p, uout, buf, (size_t)n) != 0) n = -14;
+    kfree(buf);
+    return n;
+}
+
 static long sys_mount(struct process *p, uint64_t upath, uint64_t utype) {
     char path[128], type[16];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
@@ -233,6 +256,7 @@ static long sys_umount(struct process *p, uint64_t upath) {
 }
 
 void syscall_dispatch(struct trap_frame *tf) {
+    __asm__ volatile("sti");
     struct process *p = process_current();
     if (!p) {
         tf->rax = (uint64_t)-1;
@@ -291,6 +315,12 @@ void syscall_dispatch(struct trap_frame *tf) {
         break;
     case SYS_STATFS:
         ret = sys_statfs(p, tf->rdi, tf->rsi);
+        break;
+    case SYS_NET_PING:
+        ret = sys_net_ping(tf->rdi);
+        break;
+    case SYS_NET_HTTP:
+        ret = sys_net_http(p, tf->rdi, tf->rsi, tf->rdx, tf->r10);
         break;
     case SYS_PIPE:
         ret = sys_pipe(p, tf->rdi);

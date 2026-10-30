@@ -93,6 +93,8 @@ int main(int argc, char **argv) {
     run("ls /");
     run("ps");
     run("df /");
+    run("ping 10.0.2.2");
+    run("wget example.com /");
     puts("M8b complete: libc, shell, ls/rm/cp/mv/ps/df.");
 
     int kbd = open("/dev/kbd", 0, 0);

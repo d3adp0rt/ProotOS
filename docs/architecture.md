@@ -66,7 +66,8 @@ the HHDM.
 | ls/rm/cp/mv/ps/df, readdir/statfs | M8b |
 | RTL8139 RX/TX + ARP/ICMP | M9a |
 | UDP DNS lookup | M9b |
-| DHCP/TCP/TLS/ppkg | M9c |
+| TCP client + HTTP wget | M9c |
+| DHCP/TLS/ppkg | M9d |
 | Drivers | M7 |
 | libc/userspace | M8 |
 | Network/packages | M9 |

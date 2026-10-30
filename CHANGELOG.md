@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M9c ping/wget**: user `/bin/ping` (ICMP syscall) and `/bin/wget`
+  (DNS + minimal TCP client + HTTP/1.0 GET). Fixed IP checksum double-write in
+  TCP and enabled interrupts during blocking syscalls.
 - **M9b DNS**: UDP DNS query to 10.0.2.3 with compressed-name answer parsing;
   `example.com` resolves at boot. Fixed RTL8139 CAPR writeback (CAPR-16) so RX
   continues after the first packet.

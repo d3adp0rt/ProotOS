@@ -233,7 +233,7 @@ add_custom_command(
     COMMENT "CC [libc] libc.o"
     VERBATIM)
 
-foreach(prog sh echo cat ls rm cp mv ps df)
+foreach(prog sh echo cat ls rm cp mv ps df ping wget)
     add_custom_command(
         OUTPUT ${USER_DIR}/${prog}_prog.o
         COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
@@ -280,10 +280,13 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_mv ${INITRAMFS_STAGE}/bin/mv
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_ps ${INITRAMFS_STAGE}/bin/ps
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_df ${INITRAMFS_STAGE}/bin/df
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_ping ${INITRAMFS_STAGE}/bin/ping
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_wget ${INITRAMFS_STAGE}/bin/wget
     COMMAND ${CMAKE_COMMAND} -E copy ${EXT2_IMG} ${INITRAMFS_STAGE}/ext2.img
     DEPENDS ${USER_DIR}/init.elf ${USER_DIR}/hello.elf ${USER_DIR}/bin_sh
             ${USER_DIR}/bin_echo ${USER_DIR}/bin_cat ${USER_DIR}/bin_ls ${USER_DIR}/bin_rm
             ${USER_DIR}/bin_cp ${USER_DIR}/bin_mv ${USER_DIR}/bin_ps ${USER_DIR}/bin_df
+            ${USER_DIR}/bin_ping ${USER_DIR}/bin_wget
             ${EXT2_IMG} ${INITRAMFS_FILES}
     COMMENT "STAGE initramfs"
     VERBATIM)

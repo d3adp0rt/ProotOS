@@ -17,6 +17,8 @@ static uint8_t g_gw_mac[6];
 
 static uint16_t be16(uint16_t v) { return (uint16_t)((v << 8) | (v >> 8)); }
 static void put16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t)v; }
+static void put32(uint8_t *p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16); p[2] = (uint8_t)(v >> 8); p[3] = (uint8_t)v; }
+static uint32_t rd32(const uint8_t *p) { return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3]; }
 
 static uint16_t checksum(const void *data, size_t len) {
     const uint16_t *p = data;
@@ -139,6 +141,164 @@ int net_dns_query(const char *name, uint8_t out_ip[4]) {
     }
     kprintf("[net] DNS timeout for %s\n", name);
     return -1;
+}
+
+
+#define TCP_FIN 0x01
+#define TCP_SYN 0x02
+#define TCP_RST 0x04
+#define TCP_PSH 0x08
+#define TCP_ACK 0x10
+
+static uint16_t tcp_checksum(const uint8_t *src, const uint8_t *dst, const uint8_t *tcp,
+                             size_t len) {
+    uint32_t sum = 0;
+    for (int i = 0; i < 4; i += 2) sum += (uint16_t)((src[i] << 8) | src[i + 1]);
+    for (int i = 0; i < 4; i += 2) sum += (uint16_t)((dst[i] << 8) | dst[i + 1]);
+    sum += 6 + (uint32_t)len;
+    for (size_t i = 0; i + 1 < len; i += 2) sum += (uint16_t)((tcp[i] << 8) | tcp[i + 1]);
+    if (len & 1) sum += (uint16_t)(tcp[len - 1] << 8);
+    while (sum >> 16) sum = (sum & 0xffff) + (sum >> 16);
+    return (uint16_t)~sum;
+}
+
+static int tcp_send(const uint8_t *dst_mac, const uint8_t *dst_ip, uint16_t sport, uint16_t dport,
+                    uint32_t seq, uint32_t ack, uint8_t flags, const void *data, size_t len) {
+    uint8_t frame[1500];
+    memset(frame, 0, sizeof(frame));
+    memcpy(frame, dst_mac, 6);
+    memcpy(frame + 6, g_mac, 6);
+    put16(frame + 12, ETH_IP);
+    uint8_t *ip = frame + 14;
+    ip[0] = 0x45; ip[8] = 64; ip[9] = 6;
+    put16(ip + 2, (uint16_t)(20 + 20 + len));
+    put16(ip + 4, 0x6000);
+    memcpy(ip + 12, g_ip, 4);
+    memcpy(ip + 16, dst_ip, 4);
+    put16(ip + 10, checksum(ip, 20));
+    uint8_t *tcp = ip + 20;
+    put16(tcp + 0, sport); put16(tcp + 2, dport);
+    put32(tcp + 4, seq); put32(tcp + 8, ack);
+    tcp[12] = 5 << 4; tcp[13] = flags;
+    put16(tcp + 14, 8192);
+    if (len) memcpy(tcp + 20, data, len);
+    uint16_t tc = tcp_checksum(g_ip, dst_ip, tcp, 20 + len);
+    put16(tcp + 16, tc ? tc : 0xffff);
+    return rtl8139_send(frame, 14 + 20 + 20 + len);
+}
+
+static int tcp_recv(uint8_t *out, size_t cap, size_t *out_len, uint16_t sport, uint16_t dport,
+                    uint8_t *flags, uint32_t *seq, uint32_t *ack, int timeout_ms) {
+    uint8_t rx[1600];
+    for (int i = 0; i < timeout_ms; i++) {
+        size_t n = 0;
+        if (rtl8139_poll(rx, sizeof(rx), &n) > 0 && n >= 54 && rx[12] == 0x08 && rx[13] == 0x00) {
+            uint8_t *ip = rx + 14;
+            if (ip[9] == 6) {
+                uint8_t *tcp = ip + 20;
+                uint16_t sp = (uint16_t)((tcp[0] << 8) | tcp[1]);
+                uint16_t dp = (uint16_t)((tcp[2] << 8) | tcp[3]);
+                if (sp == sport && dp == dport) {
+                    uint8_t off = (uint8_t)((tcp[12] >> 4) * 4);
+                    size_t plen = (size_t)((ip[2] << 8) | ip[3]) - 20 - off;
+                    *flags = tcp[13];
+                    *seq = rd32(tcp + 4);
+                    *ack = rd32(tcp + 8);
+                    if (out_len) *out_len = plen > cap ? cap : plen;
+                    if (out && plen) memcpy(out, tcp + off, plen > cap ? cap : plen);
+                    return 0;
+                }
+            }
+        }
+        timer_sleep_ms(1);
+    }
+    return -1;
+}
+
+int net_ping_ip(const uint8_t ip[4]) {
+    uint8_t frame[128];
+    memset(frame, 0, sizeof(frame));
+    memcpy(frame, g_gw_mac, 6);
+    memcpy(frame + 6, g_mac, 6);
+    put16(frame + 12, ETH_IP);
+    uint8_t *p = frame + 14;
+    p[0] = 0x45; p[8] = 64; p[9] = IP_ICMP;
+    put16(p + 2, 32); put16(p + 4, 0x1235);
+    memcpy(p + 12, g_ip, 4); memcpy(p + 16, ip, 4);
+    put16(p + 10, checksum(p, 20));
+    uint8_t *icmp = p + 20;
+    icmp[0] = 8; put16(icmp + 4, 0x1235); put16(icmp + 6, 1);
+    icmp[8]='P'; icmp[9]='N'; icmp[10]='G'; icmp[11]='!';
+    put16(icmp + 2, checksum(icmp, 12));
+    if (rtl8139_send(frame, 46) != 0) return -1;
+    uint8_t rx[1600];
+    for (int i = 0; i < 1000; i++) {
+        size_t n = 0;
+        if (rtl8139_poll(rx, sizeof(rx), &n) > 0 && n >= 42 && rx[12] == 0x08 && rx[13] == 0x00) {
+            uint8_t *rip = rx + 14;
+            if (rip[9] == 1 && rip[20] == 0 && memcmp(rip + 12, ip, 4) == 0) return 0;
+        }
+        timer_sleep_ms(1);
+    }
+    return -1;
+}
+
+static uint16_t g_next_port = 40000;
+
+int net_http_get(const char *host, const char *path, char *out, size_t cap) {
+    uint8_t ip[4];
+    if (net_dns_query(host, ip) != 0) return -1;
+    uint16_t sport = g_next_port++, dport = 80;
+    if (g_next_port >= 50000) g_next_port = 40000;
+    uint32_t seq = 0x1000;
+    uint8_t flags;
+    uint32_t rseq, rack;
+    size_t n = 0;
+
+    if (tcp_send(g_gw_mac, ip, sport, dport, seq, 0, TCP_SYN, 0, 0) != 0) return -1;
+    if (tcp_recv(0, 0, &n, dport, sport, &flags, &rseq, &rack, 2000) != 0) return -1;
+    if (!(flags & TCP_SYN) || !(flags & TCP_ACK) || rack != seq + 1) return -1;
+    uint32_t server_seq = rseq;
+    seq++;
+    tcp_send(g_gw_mac, ip, sport, dport, seq, server_seq + 1, TCP_ACK, 0, 0);
+
+    char req[256];
+    int rl = ksnprintf(req, sizeof(req),
+                       "GET %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", path, host);
+    if (tcp_send(g_gw_mac, ip, sport, dport, seq, server_seq + 1, TCP_PSH | TCP_ACK, req,
+                 (size_t)rl) != 0) return -1;
+    seq += (uint32_t)rl;
+    uint32_t expected = server_seq + 1;
+
+    size_t total = 0;
+    for (int i = 0; i < 5000; i++) {
+        if (tcp_recv((uint8_t *)out + total, cap > total ? cap - total : 0, &n, dport, sport,
+                     &flags, &rseq, &rack, 1) == 0) {
+            if (flags & TCP_RST) break;
+            if (n) {
+                total += n;
+                expected = rseq + (uint32_t)n;
+                tcp_send(g_gw_mac, ip, sport, dport, seq, expected, TCP_ACK, 0, 0);
+            }
+            if (flags & TCP_FIN) {
+                tcp_send(g_gw_mac, ip, sport, dport, seq, expected + 1, TCP_ACK, 0, 0);
+                break;
+            }
+            if (total >= cap) break;
+        }
+    }
+    if (!total) return -1;
+    char *body = 0;
+    for (size_t i = 0; i + 3 < total; i++) {
+        if (out[i] == '\r' && out[i+1] == '\n' && out[i+2] == '\r' && out[i+3] == '\n') {
+            body = out + i + 4;
+            break;
+        }
+    }
+    if (!body) return -1;
+    size_t blen = total - (size_t)(body - out);
+    memmove(out, body, blen);
+    return (int)blen;
 }
 
 int net_ping(void) {

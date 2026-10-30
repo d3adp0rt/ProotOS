@@ -47,6 +47,8 @@ def main() -> int:
         "[ahci] IDENTIFY: 16384 sectors",
         "[net] ICMP echo reply from 10.0.2.2",
         "[net] DNS example.com ->",
+        "ping 10.0.2.2: reply",
+        "wget: ",
         "ProotOS shell (M8)",
         "M8 libc + shell + /bin/echo works",
         "Filesystem /:",
