@@ -25,6 +25,7 @@ int mkdir(const char *path, int mode);
 int unlink(const char *path);
 int shutdown_os(void);
 int reboot_os(void);
+int clear_screen(void);
 
 size_t strlen(const char *s);
 int strcmp(const char *a, const char *b);

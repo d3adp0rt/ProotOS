@@ -33,6 +33,7 @@ static volatile uint32_t g_head;
 static volatile uint32_t g_tail;
 static int g_shift;
 static int g_caps;
+static int g_extended;
 
 static inline uint8_t inb(uint16_t port) {
     uint8_t v;
@@ -91,7 +92,7 @@ void keyboard_init(void) {
     while (inb(0x64) & 1)
         (void)inb(0x60);
     g_head = g_tail = 0;
-    g_shift = g_caps = 0;
+    g_shift = g_caps = g_extended = 0;
     keyboard_feed(0x1e); /* 'a' */
     keyboard_feed(0x2a); /* shift */
     keyboard_feed(0x1e); /* 'A' */

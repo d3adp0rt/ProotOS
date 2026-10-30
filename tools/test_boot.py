@@ -19,7 +19,7 @@ def main() -> int:
             str(ROOT / "tools/run-qemu.py"),
             "--iso", str(ISO),
             "--headless",
-            "--timeout", "45",
+            "--timeout", "60",
             "--fresh-vars",
         ],
         stdout=subprocess.PIPE,

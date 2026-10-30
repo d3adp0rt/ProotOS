@@ -266,3 +266,5 @@ int net_ping_ip(unsigned ip) { return (int)syscall1(81, ip); }
 long net_http_get(const char *host, const char *path, char *buf, size_t cap) {
     return syscall4(82, (long)host, (long)path, (long)buf, (long)cap);
 }
+
+int clear_screen(void) { return (int)syscall0(83); }

@@ -29,6 +29,7 @@
 #define SYS_STATFS 80
 #define SYS_NET_PING 81
 #define SYS_NET_HTTP 82
+#define SYS_CLEAR 83
 #define SYS_PIPE 22
 #define SYS_FORK 57
 #define SYS_EXECVE 59
@@ -321,6 +322,10 @@ void syscall_dispatch(struct trap_frame *tf) {
         break;
     case SYS_NET_HTTP:
         ret = sys_net_http(p, tf->rdi, tf->rsi, tf->rdx, tf->r10);
+        break;
+    case SYS_CLEAR:
+        console_clear();
+        ret = 0;
         break;
     case SYS_PIPE:
         ret = sys_pipe(p, tf->rdi);

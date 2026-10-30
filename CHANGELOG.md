@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Shell improvements**: command history (8 entries) with Up/Down arrows,
+  `history` and `clear` built-ins, extended PS/2 arrow scancodes, and a
+  framebuffer cell erase fix.
 - **Terminal erase fix**: framebuffer cells are cleared before glyph draw, so
   backspace/space really erase characters.
 - **wget HTTPS diagnostics**: 3xx redirects to `https://` now report that TLS

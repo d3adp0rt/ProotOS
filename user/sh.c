@@ -13,6 +13,9 @@ static void cat_file(const char *path) {
     close(fd);
 }
 
+static char g_history[8][128];
+static int g_hist_count;
+
 static int run(char *line) {
     char *argv[16];
     int argc = 0;
@@ -38,7 +41,12 @@ static int run(char *line) {
         return 1;
     }
     if (strcmp(argv[0], "help") == 0) {
-        puts("builtins: help echo cat exit shutdown; external: /bin/*");
+        puts("builtins: help echo cat clear history exit shutdown; external: /bin/*");
+        return 0;
+    }
+    if (strcmp(argv[0], "clear") == 0) { clear_screen(); return 0; }
+    if (strcmp(argv[0], "history") == 0) {
+        for (int i = 0; i < 8; i++) if (g_history[i][0]) printf("%d %s\n", i + 1, g_history[i]);
         return 0;
     }
     if (strcmp(argv[0], "echo") == 0) {
@@ -104,36 +112,60 @@ int main(int argc, char **argv) {
     }
 
     char line[128];
-    int len = 0;
+    int len = 0, prev_len = 0, hist_pos = 0;
     for (;;) {
         printf("proot> ");
         len = 0;
+        prev_len = 0;
+        hist_pos = g_hist_count;
         for (;;) {
             char c;
             long n = read(kbd, &c, 1);
-            if (n <= 0) {
-                sleep_ms(10);
-                continue;
-            }
+            if (n <= 0) { sleep_ms(10); continue; }
             if (c == '\n' || c == '\r') {
                 putchar('\n');
                 line[len] = 0;
                 break;
             }
             if (c == 8 || c == 127) {
-                if (len > 0) {
-                    len--;
-                    printf("\b \b");
+                if (len > 0) { len--; printf("\b \b"); }
+                continue;
+            }
+            if ((unsigned char)c == 0x80) { /* up */
+                if (g_hist_count && hist_pos > 0) hist_pos--;
+                if (g_hist_count) {
+                    strcpy(line, g_history[hist_pos]);
+                    len = (int)strlen(line);
+                    printf("\rproot> %s", line);
+                    for (int i = len; i < prev_len + 8; i++) putchar(' ');
+                    printf("\rproot> %s", line);
+                    prev_len = len;
                 }
                 continue;
             }
-            if (len < (int)sizeof(line) - 1) {
-                line[len++] = c;
-                putchar(c);
+            if ((unsigned char)c == 0x81) { /* down */
+                if (hist_pos < g_hist_count) hist_pos++;
+                if (hist_pos < g_hist_count) strcpy(line, g_history[hist_pos]);
+                else line[0] = 0;
+                len = (int)strlen(line);
+                printf("\rproot> %s", line);
+                for (int i = len; i < prev_len + 8; i++) putchar(' ');
+                printf("\rproot> %s", line);
+                prev_len = len;
+                continue;
+            }
+            if ((unsigned char)c >= 0x80) continue;
+            if (len < (int)sizeof(line) - 1) { line[len++] = c; putchar(c); }
+        }
+        if (len > 0) {
+            strcpy(g_history[g_hist_count % 8], line);
+            g_hist_count++;
+            if (g_hist_count > 8) {
+                for (int i = 0; i < 7; i++) strcpy(g_history[i], g_history[i + 1]);
+                g_hist_count = 7;
             }
         }
-        if (run(line))
-            break;
+        if (run(line)) break;
     }
     return 0;
 }
