@@ -122,7 +122,7 @@ static int elf_load_user(struct process *p, const void *data, size_t size) {
         return -1;
 
     p->entry = eh->e_entry;
-    p->user_stack_top = USER_STACK_TOP - 16;
+    p->user_stack_top = USER_STACK_TOP - 4096;
     p->brk = (max_end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
     return 0;
 }
@@ -167,7 +167,8 @@ int process_exec(struct process *p, const char *name) {
 int process_exec_argv(struct process *p, const char *name, char **argv, int argc) {
     const void *data = 0;
     size_t size = 0;
-    if (name && name[0] == '/') name++;
+    if (name && name[0] == '/')
+        name++;
     if (!p || initramfs_find(name, &data, &size) != 0)
         return -1;
 
@@ -179,24 +180,31 @@ int process_exec_argv(struct process *p, const char *name, char **argv, int argc
         return -1;
 
     if (argc > 0 && argv) {
-        if (argc > 16) argc = 16;
+        if (argc > 16)
+            argc = 16;
         uint64_t ptrs[16];
         uint64_t sp = tmp.user_stack_top;
         for (int i = 0; i < argc; i++) {
             size_t len = strlen(argv[i]);
-            if (len > 127) len = 127;
+            if (len > 127)
+                len = 127;
             sp -= len + 1;
-            if (user_copy_to(&tmp, sp, argv[i], len + 1) != 0) return -1;
+            if (user_copy_to(&tmp, sp, argv[i], len + 1) != 0)
+                return -1;
             ptrs[i] = sp;
         }
         sp &= ~7ULL;
         sp -= (uint64_t)(argc + 3) * 8;
         uint64_t argc64 = (uint64_t)argc;
         uint64_t zero = 0;
-        if (user_copy_to(&tmp, sp, &argc64, 8) != 0) return -1;
-        if (user_copy_to(&tmp, sp + 8, ptrs, (size_t)argc * 8) != 0) return -1;
-        if (user_copy_to(&tmp, sp + 8 + (uint64_t)argc * 8, &zero, 8) != 0) return -1;
-        if (user_copy_to(&tmp, sp + 16 + (uint64_t)argc * 8, &zero, 8) != 0) return -1;
+        if (user_copy_to(&tmp, sp, &argc64, 8) != 0)
+            return -1;
+        if (user_copy_to(&tmp, sp + 8, ptrs, (size_t)argc * 8) != 0)
+            return -1;
+        if (user_copy_to(&tmp, sp + 8 + (uint64_t)argc * 8, &zero, 8) != 0)
+            return -1;
+        if (user_copy_to(&tmp, sp + 16 + (uint64_t)argc * 8, &zero, 8) != 0)
+            return -1;
         tmp.user_stack_top = sp;
     }
 
@@ -217,6 +225,19 @@ struct process *process_find(uint32_t pid) {
             return p;
     }
     return 0;
+}
+
+int process_list(char *buf, size_t cap) {
+    size_t off = 0;
+    for (struct process *p = g_processes; p && off + 1 < cap; p = p->next_all) {
+        const char *state = p->state == PROC_ZOMBIE ? "zombie" : "running";
+        const char *name = p->thread ? p->thread->name : "?";
+        int n = ksnprintf(buf + off, cap - off, "%u %u %s %s\n", p->pid, p->ppid, state, name);
+        if (n < 0)
+            break;
+        off += (size_t)n;
+    }
+    return (int)off;
 }
 
 long process_ptrace(int request, int pid, uint64_t addr, uint64_t data) {

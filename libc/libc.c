@@ -237,3 +237,19 @@ int putchar(int c) {
     write(1, &ch, 1);
     return c;
 }
+
+int statfs(const char *path, struct statfs *st) {
+    return (int)syscall2(80, (long)path, (long)st);
+}
+int readdir(const char *path, unsigned index, char *name, size_t len) {
+    return (int)syscall4(78, (long)path, index, (long)name, (long)len);
+}
+long getprocs(char *buf, size_t len) {
+    return syscall2(79, (long)buf, (long)len);
+}
+int mount_fs(const char *path, const char *type) {
+    return (int)syscall2(11, (long)path, (long)type);
+}
+int umount_fs(const char *path) {
+    return (int)syscall1(12, (long)path);
+}

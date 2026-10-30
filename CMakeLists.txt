@@ -232,7 +232,7 @@ add_custom_command(
     COMMENT "CC [libc] libc.o"
     VERBATIM)
 
-foreach(prog sh echo cat)
+foreach(prog sh echo cat ls rm cp mv ps df)
     add_custom_command(
         OUTPUT ${USER_DIR}/${prog}_prog.o
         COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
@@ -273,9 +273,17 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_sh ${INITRAMFS_STAGE}/bin/sh
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_echo ${INITRAMFS_STAGE}/bin/echo
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_cat ${INITRAMFS_STAGE}/bin/cat
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_ls ${INITRAMFS_STAGE}/bin/ls
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_rm ${INITRAMFS_STAGE}/bin/rm
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_cp ${INITRAMFS_STAGE}/bin/cp
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_mv ${INITRAMFS_STAGE}/bin/mv
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_ps ${INITRAMFS_STAGE}/bin/ps
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_df ${INITRAMFS_STAGE}/bin/df
     COMMAND ${CMAKE_COMMAND} -E copy ${EXT2_IMG} ${INITRAMFS_STAGE}/ext2.img
     DEPENDS ${USER_DIR}/init.elf ${USER_DIR}/hello.elf ${USER_DIR}/bin_sh
-            ${USER_DIR}/bin_echo ${USER_DIR}/bin_cat ${EXT2_IMG} ${INITRAMFS_FILES}
+            ${USER_DIR}/bin_echo ${USER_DIR}/bin_cat ${USER_DIR}/bin_ls ${USER_DIR}/bin_rm
+            ${USER_DIR}/bin_cp ${USER_DIR}/bin_mv ${USER_DIR}/bin_ps ${USER_DIR}/bin_df
+            ${EXT2_IMG} ${INITRAMFS_FILES}
     COMMENT "STAGE initramfs"
     VERBATIM)
 

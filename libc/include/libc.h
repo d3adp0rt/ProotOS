@@ -40,4 +40,10 @@ int putchar(int c);
 int atoi(const char *s);
 
 struct stat { uint64_t size; uint32_t mode; uint32_t type; };
+struct statfs { uint64_t total_blocks; uint64_t free_blocks; uint32_t block_size; };
 int stat(const char *path, struct stat *st);
+int statfs(const char *path, struct statfs *st);
+int readdir(const char *path, unsigned index, char *name, size_t len);
+long getprocs(char *buf, size_t len);
+int mount_fs(const char *path, const char *type);
+int umount_fs(const char *path);

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M8b coreutils**: `ls` (readdir syscall), `rm`, `cp`, `mv`, `ps` (process
+  list syscall), `df` (statfs), VFS readdir/statfs callbacks for ramfs and
+  ext2, and mount/umount syscalls.
 - **M8 libc and shell**: freestanding user libc (syscalls, string, printf,
   argv-aware execve), `/bin/sh` with line editor and built-ins, `/bin/echo`,
   `/bin/cat`, initramfs `/bin` staging, and a boot demo exercising fork,

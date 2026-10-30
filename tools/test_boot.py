@@ -46,7 +46,8 @@ def main() -> int:
         "[rtl8139] test TX: PASS",
         "ProotOS shell (M8)",
         "M8 libc + shell + /bin/echo works",
-        "M8 complete: libc, init, shell, echo/cat coreutils.",
+        "Filesystem /:",
+        "M8b complete: libc, shell, ls/rm/cp/mv/ps/df.",
     ]
     missing = [line for line in required if line not in out]
     if missing:

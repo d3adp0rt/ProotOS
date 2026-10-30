@@ -3,12 +3,12 @@
 A from-scratch 64-bit operating system for x86_64 UEFI, built as a demo and
 research prototype. Monolithic kernel, own bootloader, own userspace.
 
-**Status: M8 — libc and shell.** The UEFI loader loads `kernel.elf` and a cpio
-initramfs from the ESP, builds page tables, exits boot services and jumps into
-the higher-half kernel. The kernel brings up consoles, IDT, memory, ACPI/APIC,
-SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk, keyboard,
-RTC, rtl8139 and a userland with a small libc, `/bin/sh`, `/bin/echo` and
-`/bin/cat`.
+**Status: M8b — libc, shell and coreutils.** The UEFI loader loads
+`kernel.elf` and a cpio initramfs from the ESP, builds page tables, exits boot
+services and jumps into the higher-half kernel. The kernel brings up consoles,
+IDT, memory, ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI,
+virtio-blk, keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`,
+`ls`, `rm`, `cp`, `mv`, `ps`, `df`.
 
 ![status](https://img.shields.io/badge/status-M1-blue)
 

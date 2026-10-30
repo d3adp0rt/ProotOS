@@ -90,7 +90,10 @@ int main(int argc, char **argv) {
     }
     int st = 0;
     wait4(pid, &st, 0, 0);
-    puts("M8 complete: libc, init, shell, echo/cat coreutils.");
+    run("ls /");
+    run("ps");
+    run("df /");
+    puts("M8b complete: libc, shell, ls/rm/cp/mv/ps/df.");
 
     int kbd = open("/dev/kbd", 0, 0);
     if (kbd < 0) {

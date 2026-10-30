@@ -7,6 +7,7 @@
 #include "kernel.h"
 
 struct block_device;
+struct vfs_statfs;
 
 #define VFS_NAME_MAX 64
 #define VFS_FILE 1
@@ -28,6 +29,9 @@ struct vfs_super {
                  size_t len);
     long (*write)(struct vfs_super *sb, struct vfs_inode *inode, uint64_t offset, const void *buf,
                   size_t len);
+    int (*readdir)(struct vfs_super *sb, struct vfs_inode *dir, uint32_t index, char *name,
+                   size_t len, int *type);
+    int (*statfs)(struct vfs_super *sb, struct vfs_statfs *out);
 };
 
 struct vfs_inode {
@@ -52,8 +56,16 @@ struct vfs_stat {
     uint32_t type;
 };
 
+struct vfs_statfs {
+    uint64_t total_blocks;
+    uint64_t free_blocks;
+    uint32_t block_size;
+};
+
 void vfs_init(void);
 struct vfs_inode *vfs_lookup(const char *path);
+int vfs_readdir(const char *path, uint32_t index, char *name, size_t len, int *type);
+int vfs_statfs(const char *path, struct vfs_statfs *out);
 int vfs_read(struct vfs_inode *inode, uint64_t offset, void *buf, size_t len);
 int vfs_write(struct vfs_inode *inode, uint64_t offset, const void *buf, size_t len);
 struct vfs_inode *vfs_create(const char *path, int type, int mode);

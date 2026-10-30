@@ -23,8 +23,7 @@ void console_putc(char c);
 void console_write(const char *s);
 
 void kprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-int ksnprintf(char *out, size_t cap, const char *fmt, ...)
-    __attribute__((format(printf, 3, 4)));
+int ksnprintf(char *out, size_t cap, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
 void panic(const char *fmt, ...) __attribute__((noreturn, format(printf, 1, 2)));
 
 void *memset(void *dst, int value, size_t n);

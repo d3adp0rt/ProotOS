@@ -76,6 +76,7 @@ long process_write(int fd, const void *buf, size_t len);
 void process_close_fd(int fd);
 void process_fd_copy(struct process *parent, struct process *child);
 struct process *process_find(uint32_t pid);
+int process_list(char *buf, size_t cap);
 long process_ptrace(int request, int pid, uint64_t addr, uint64_t data);
 void process_exit(int code) __attribute__((noreturn));
 

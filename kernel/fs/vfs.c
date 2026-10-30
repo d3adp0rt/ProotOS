@@ -245,6 +245,41 @@ int vfs_stat(const char *path, struct vfs_stat *out) {
     return 0;
 }
 
+int vfs_statfs(const char *path, struct vfs_statfs *out) {
+    struct vfs_inode *inode = vfs_lookup(path);
+    if (!inode || !out)
+        return -1;
+    if (inode->sb && inode->sb->statfs)
+        return inode->sb->statfs(inode->sb, out);
+    struct pmm_stats s = pmm_get_stats();
+    out->block_size = 4096;
+    out->total_blocks = s.total_pages;
+    out->free_blocks = s.free_pages;
+    return 0;
+}
+
+int vfs_readdir(const char *path, uint32_t index, char *name, size_t len, int *type) {
+    struct vfs_inode *dir = vfs_lookup(path);
+    if (!dir || dir->type != VFS_DIR || !name || len == 0)
+        return -1;
+    if (dir->sb && dir->sb->readdir)
+        return dir->sb->readdir(dir->sb, dir, index, name, len, type);
+    uint32_t i = 0;
+    for (struct vfs_inode *c = dir->children; c; c = c->next) {
+        if (i++ != index)
+            continue;
+        size_t n = strlen(c->name);
+        if (n >= len)
+            n = len - 1;
+        memcpy(name, c->name, n);
+        name[n] = 0;
+        if (type)
+            *type = c->type;
+        return 0;
+    }
+    return -1;
+}
+
 int vfs_mount(const char *path, const char *type) {
     return vfs_mount_block(path, type, ramdisk_device());
 }
@@ -375,8 +410,10 @@ void vfs_init(void) {
     const void *ext2_data = 0;
     size_t ext2_size = 0;
     struct block_device *disk = virtio_blk_device();
-    if (!disk) disk = ata_device();
-    if (!disk) disk = ahci_device();
+    if (!disk)
+        disk = ata_device();
+    if (!disk)
+        disk = ahci_device();
     if (disk) {
         vfs_mount_block("/mnt", "ext2", disk);
     } else if (initramfs_find("ext2.img", &ext2_data, &ext2_size) == 0) {

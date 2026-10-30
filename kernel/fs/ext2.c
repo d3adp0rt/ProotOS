@@ -486,6 +486,60 @@ static long ext2_write_file(struct vfs_super *sb, struct vfs_inode *inode, uint6
     return (long)done;
 }
 
+static int ext2_readdir(struct vfs_super *sb, struct vfs_inode *dir, uint32_t index, char *name,
+                        size_t len, int *type) {
+    struct ext2_fs *fs = sb->data;
+    uint8_t raw[128];
+    if (ext2_read_inode(fs, dir->ino, raw) != 0)
+        return -1;
+    uint32_t size = rd32(raw + 4);
+    uint32_t seen = 0;
+    uint8_t buf[4096];
+    for (uint32_t logical = 0; logical * fs->block_size < size; logical++) {
+        uint32_t block = ext2_bmap(fs, raw, logical, 0);
+        if (!block)
+            continue;
+        if (ext2_read_block(fs, block, buf) != 0)
+            continue;
+        uint32_t off = 0;
+        while (off + 8 <= fs->block_size) {
+            uint32_t e_ino = rd32(buf + off);
+            uint16_t rec = rd16(buf + off + 4);
+            uint8_t nlen = buf[off + 6];
+            if (rec < 8)
+                break;
+            if (e_ino && nlen) {
+                char entry[256];
+                uint32_t n = nlen < 255 ? nlen : 255;
+                memcpy(entry, buf + off + 8, n);
+                entry[n] = 0;
+                if (strcmp(entry, ".") && strcmp(entry, "..")) {
+                    if (seen++ == index) {
+                        size_t out = n;
+                        if (out >= len)
+                            out = len - 1;
+                        memcpy(name, entry, out);
+                        name[out] = 0;
+                        if (type)
+                            *type = buf[off + 7] == EXT2_FT_DIR ? VFS_DIR : VFS_FILE;
+                        return 0;
+                    }
+                }
+            }
+            off += rec;
+        }
+    }
+    return -1;
+}
+
+static int ext2_statfs(struct vfs_super *sb, struct vfs_statfs *out) {
+    struct ext2_fs *fs = sb->data;
+    out->block_size = fs->block_size;
+    out->total_blocks = fs->blocks_count;
+    out->free_blocks = fs->free_blocks;
+    return 0;
+}
+
 struct vfs_super *ext2_mount(struct block_device *dev) {
     if (!dev)
         return 0;
@@ -526,6 +580,8 @@ struct vfs_super *ext2_mount(struct block_device *dev) {
     super->unlink = ext2_unlink;
     super->read = ext2_read_file;
     super->write = ext2_write_file;
+    super->readdir = ext2_readdir;
+    super->statfs = ext2_statfs;
     fs->super = super;
     super->root = ext2_make_inode(fs, EXT2_ROOT_INO, "/", 0);
     kprintf("[ext2] mounted: %u KiB blocks, %u inodes, %u/%u blocks free\n", fs->block_size,

@@ -22,6 +22,9 @@
 #define SYS_LSEEK 10
 #define SYS_MOUNT 11
 #define SYS_UMOUNT 12
+#define SYS_READDIR 78
+#define SYS_GETPROCS 79
+#define SYS_STATFS 80
 #define SYS_PIPE 22
 #define SYS_FORK 57
 #define SYS_EXECVE 59
@@ -100,15 +103,19 @@ static long sys_execve(struct process *p, uint64_t upath, uint64_t uargv) {
     if (uargv) {
         for (int i = 0; i < 16; i++) {
             uint64_t ptr = 0;
-            if (user_copy_from(p, &ptr, uargv + (uint64_t)i * 8, 8) != 0) return -14;
-            if (!ptr) break;
+            if (user_copy_from(p, &ptr, uargv + (uint64_t)i * 8, 8) != 0)
+                return -14;
+            if (!ptr)
+                break;
             static char args[16][128];
-            if (user_copy_from(p, args[i], ptr, sizeof(args[i]) - 1) != 0) return -14;
+            if (user_copy_from(p, args[i], ptr, sizeof(args[i]) - 1) != 0)
+                return -14;
             args[i][sizeof(args[i]) - 1] = 0;
             argv[argc++] = args[i];
         }
     }
-    if (process_exec_argv(p, path, argv, argc) != 0) return -2;
+    if (process_exec_argv(p, path, argv, argc) != 0)
+        return -2;
     process_enter_user(p);
 }
 
@@ -164,6 +171,67 @@ static long sys_lseek(struct process *p, int fd, int64_t offset, int whence) {
     return (long)f->offset;
 }
 
+static long sys_readdir(struct process *p, uint64_t upath, uint32_t index, uint64_t uname,
+                        uint64_t len) {
+    char path[128];
+    char name[128];
+    if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
+        return -14;
+    path[sizeof(path) - 1] = 0;
+    int type = 0;
+    if (vfs_readdir(path, index, name, sizeof(name), &type) != 0)
+        return -1;
+    size_t n = strlen(name);
+    if (n >= len)
+        n = len - 1;
+    if (user_copy_to(p, uname, name, n + 1) != 0)
+        return -14;
+    return type;
+}
+
+static long sys_getprocs(struct process *p, uint64_t ubuf, uint64_t len) {
+    char buf[2048];
+    int n = process_list(buf, sizeof(buf));
+    if (n <= 0)
+        return n;
+    if ((uint64_t)n > len)
+        n = (int)len;
+    if (user_copy_to(p, ubuf, buf, (size_t)n) != 0)
+        return -14;
+    return n;
+}
+
+static long sys_statfs(struct process *p, uint64_t upath, uint64_t uout) {
+    char path[128];
+    if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
+        return -14;
+    path[sizeof(path) - 1] = 0;
+    struct vfs_statfs st;
+    if (vfs_statfs(path, &st) != 0)
+        return -2;
+    if (user_copy_to(p, uout, &st, sizeof(st)) != 0)
+        return -14;
+    return 0;
+}
+
+static long sys_mount(struct process *p, uint64_t upath, uint64_t utype) {
+    char path[128], type[16];
+    if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
+        return -14;
+    if (user_copy_from(p, type, utype, sizeof(type) - 1) != 0)
+        return -14;
+    path[sizeof(path) - 1] = type[sizeof(type) - 1] = 0;
+    return vfs_mount(path, type);
+}
+
+static long sys_umount(struct process *p, uint64_t upath) {
+    char path[128];
+    if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
+        return -14;
+    path[sizeof(path) - 1] = 0;
+    return vfs_umount(path);
+}
+
 void syscall_dispatch(struct trap_frame *tf) {
     struct process *p = process_current();
     if (!p) {
@@ -208,6 +276,21 @@ void syscall_dispatch(struct trap_frame *tf) {
         break;
     case SYS_LSEEK:
         ret = sys_lseek(p, (int)tf->rdi, (int64_t)tf->rsi, (int)tf->rdx);
+        break;
+    case SYS_MOUNT:
+        ret = sys_mount(p, tf->rdi, tf->rsi);
+        break;
+    case SYS_UMOUNT:
+        ret = sys_umount(p, tf->rdi);
+        break;
+    case SYS_READDIR:
+        ret = sys_readdir(p, tf->rdi, (uint32_t)tf->rsi, tf->rdx, tf->r10);
+        break;
+    case SYS_GETPROCS:
+        ret = sys_getprocs(p, tf->rdi, tf->rsi);
+        break;
+    case SYS_STATFS:
+        ret = sys_statfs(p, tf->rdi, tf->rsi);
         break;
     case SYS_PIPE:
         ret = sys_pipe(p, tf->rdi);
