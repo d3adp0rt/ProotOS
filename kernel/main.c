@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "kernel.h"
+#include "mm.h"
 
 static const char *memory_type_name(uint32_t type) {
     switch (type) {
@@ -101,7 +102,7 @@ void kmain(struct proot_bootinfo *bi) {
     kprintf(" | |_) | '__/ _ \\| __| | | \\___ \\\n");
     kprintf(" |  __/| | | (_) | |_| |_| |___) |\n");
     kprintf(" |_|   |_|  \\___/ \\__|\\___/|____/\n");
-    kprintf("  %s %s (%s) - M1 boot chain\n\n", KERNEL_NAME, KERNEL_VERSION, KERNEL_ARCH);
+    kprintf("  %s %s (%s) - M2 memory management\n\n", KERNEL_NAME, KERNEL_VERSION, KERNEL_ARCH);
 
     kprintf("[boot] loader: %s\n", bi->loader);
     kprintf("[boot] cmdline: %s\n", bi->cmdline);
@@ -139,7 +140,13 @@ void kmain(struct proot_bootinfo *bi) {
     idt_init();
     kprintf("[cpu] IDT installed, exceptions armed\n");
 
-    kprintf("\nM1 complete: long mode, paging, framebuffer and serial are alive.\n");
-    kprintf("Halting. Next milestone: buddy allocator, APIC and SMP.\n");
+    pmm_init(bi);
+    vmm_init();
+    kmalloc_init();
+    pmm_dump();
+    mm_selftest();
+
+    kprintf("\nM2 complete: buddy allocator, slab heap, vmalloc and paging tests are alive.\n");
+    kprintf("Halting. Next milestone: APIC, timers and SMP.\n");
     cpu_halt();
 }

@@ -50,6 +50,8 @@ the HHDM.
 | Framebuffer console | M1 (8x8 font, VGA fallback) |
 | IDT/exceptions | M1 (diagnostics, halt) |
 | Physical allocator | M2 |
+| Kernel heap / vmalloc | M2 |
+| VMM (kernel mappings) | M2 |
 | APIC/SMP/timers | M3 |
 | Scheduler | M4 |
 | Processes/syscalls | M5 |

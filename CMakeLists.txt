@@ -72,6 +72,10 @@ set(KERNEL_C_SOURCES
     kernel/lib/kprintf.c
     kernel/arch/x86_64/idt.c
     kernel/arch/x86_64/exceptions.c
+    kernel/mm/pmm.c
+    kernel/mm/vmm.c
+    kernel/mm/kmalloc.c
+    kernel/mm/ktest.c
 )
 
 set(KERNEL_ASM_SOURCES

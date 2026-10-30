@@ -45,15 +45,15 @@ static uint64_t read_cr2(void) {
 
 void exception_dispatch(struct trap_frame *tf) {
     if (tf->vector < 32) {
-        kprintf("\nEXCEPTION %llu: %s (error=%#llx)\n", (unsigned long long)tf->vector,
+        kprintf("\nEXCEPTION %llu: %s (error=0x%llx)\n", (unsigned long long)tf->vector,
                 exception_names[tf->vector], (unsigned long long)tf->error);
     } else {
-        kprintf("\nEXCEPTION %llu (error=%#llx)\n", (unsigned long long)tf->vector,
+        kprintf("\nEXCEPTION %llu (error=0x%llx)\n", (unsigned long long)tf->vector,
                 (unsigned long long)tf->error);
     }
-    kprintf("  RIP=%p CS=%#llx RFLAGS=%#llx\n", (void *)tf->rip, (unsigned long long)tf->cs,
+    kprintf("  RIP=%p CS=0x%llx RFLAGS=0x%llx\n", (void *)tf->rip, (unsigned long long)tf->cs,
             (unsigned long long)tf->rflags);
-    kprintf("  RSP=%p SS=%#llx\n", (void *)tf->rsp, (unsigned long long)tf->ss);
+    kprintf("  RSP=%p SS=0x%llx\n", (void *)tf->rsp, (unsigned long long)tf->ss);
     kprintf("  RAX=%p RBX=%p RCX=%p RDX=%p\n", (void *)tf->rax, (void *)tf->rbx, (void *)tf->rcx,
             (void *)tf->rdx);
     kprintf("  RSI=%p RDI=%p RBP=%p\n", (void *)tf->rsi, (void *)tf->rdi, (void *)tf->rbp);

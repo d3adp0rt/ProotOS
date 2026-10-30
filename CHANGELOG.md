@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M2 memory management**: DMA32/Normal buddy allocator with page metadata,
+  zone statistics, slab/kmalloc/kfree/krealloc/kzalloc, vmalloc/vfree, kernel
+  page-table manager with 4K map/unmap/query, guard-page support and M2
+  self-tests (`[ktest] M2 memory tests: PASS`).
 - Repository bootstrap: GPL-3.0 license, CMake + Ninja build, docs and ADRs.
 - UEFI bootloader (`BOOTX64.EFI`): config parsing, GOP setup, ELF64 loading,
   cpio initramfs loading, ACPI RSDP discovery, memory map, 4-level page tables
