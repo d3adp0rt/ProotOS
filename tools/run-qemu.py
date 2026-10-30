@@ -26,6 +26,7 @@ def find_ovmf():
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--iso", default=str(ROOT / "build/images/prootos.iso"))
+    ap.add_argument("--disk", default=str(ROOT / "build/images/data.img"))
     ap.add_argument("--memory", default="1G")
     ap.add_argument("--smp", default="4")
     ap.add_argument("--headless", action="store_true")
@@ -33,6 +34,7 @@ def main() -> int:
     ap.add_argument("--gdb", action="store_true")
     ap.add_argument("--timeout", type=float, default=0)
     ap.add_argument("--fresh-vars", action="store_true")
+    ap.add_argument("--keep-disk", action="store_true")
     args = ap.parse_args()
 
     iso = Path(args.iso)
@@ -62,6 +64,15 @@ def main() -> int:
         "-no-reboot",
         "-serial", "stdio",
     ]
+    disk = Path(args.disk)
+    if disk.exists():
+        run_disk = work / "data-run.img"
+        if not args.keep_disk or not run_disk.exists():
+            shutil.copy2(disk, run_disk)
+        cmd += [
+            "-drive", f"if=none,id=disk,file={run_disk},format=raw",
+            "-device", "virtio-blk-pci,drive=disk,disable-modern=on,disable-legacy=off",
+        ]
     if args.gdb:
         cmd += ["-s", "-S"]
     if args.headless or not args.gui:

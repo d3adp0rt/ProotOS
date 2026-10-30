@@ -42,7 +42,7 @@ def main() -> int:
         "fs test done",
         "ext2 write/read works",
         "ext2 test done",
-        "M6b complete",
+        "M7a complete",
     ]
     missing = [line for line in required if line not in out]
     if missing:

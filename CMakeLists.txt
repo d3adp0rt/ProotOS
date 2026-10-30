@@ -79,6 +79,10 @@ set(KERNEL_C_SOURCES
     kernel/fs/vfs.c
     kernel/fs/ramdisk.c
     kernel/fs/ext2.c
+    kernel/drivers/pci.c
+    kernel/drivers/ahci.c
+    kernel/drivers/ata.c
+    kernel/drivers/virtio_blk.c
     kernel/lib/string.c
     kernel/lib/serial.c
     kernel/lib/kprintf.c
@@ -249,7 +253,16 @@ add_custom_command(
     COMMENT "GEN prootos.iso"
     VERBATIM)
 
-add_custom_target(prootos ALL DEPENDS ${IMAGE_DIR}/prootos.iso)
+add_custom_command(
+    OUTPUT ${IMAGE_DIR}/data.img
+    COMMAND dd if=/dev/zero of=${IMAGE_DIR}/data.img bs=1M count=8 status=none
+    COMMAND mke2fs -q -F -t ext2 -b 1024 -I 128
+        -O ^extent,^64bit,^metadata_csum,^flex_bg,^dir_index
+        -L PROOTDATA ${IMAGE_DIR}/data.img
+    COMMENT "GEN data.img"
+    VERBATIM)
+
+add_custom_target(prootos ALL DEPENDS ${IMAGE_DIR}/prootos.iso ${IMAGE_DIR}/data.img)
 
 add_custom_target(run
     COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/run-qemu.py

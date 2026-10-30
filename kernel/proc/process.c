@@ -390,8 +390,7 @@ void process_exit(int code) {
         wait_queue_wake_all(&p->parent->child_wq);
     kprintf("[proc] pid=%u exited with %d\n", p->pid, code);
     if (!p->parent) {
-        kprintf("\nM6b complete: VFS ramfs + ext2 rw, mount/umount, FHS, "
-                "/proc, /dev.\n");
+        kprintf("\nM7a complete: PCI, virtio-blk, block layer, ext2 on /dev/vda.\n");
     }
     kthread_exit();
 }

@@ -13,6 +13,10 @@
 #include "initramfs.h"
 #include "proc.h"
 #include "vfs.h"
+#include "pci.h"
+#include "ahci.h"
+#include "ata.h"
+#include "virtio_blk.h"
 
 static const char *memory_type_name(uint32_t type) {
     switch (type) {
@@ -154,6 +158,12 @@ void kmain(struct proot_bootinfo *bi) {
     pmm_init(bi);
     vmm_init();
     kmalloc_init();
+    pci_init();
+    virtio_blk_init();
+    if (!virtio_blk_device()) {
+        ata_init();
+        if (!ata_device()) ahci_init();
+    }
     vfs_init();
     pmm_dump();
     mm_selftest();

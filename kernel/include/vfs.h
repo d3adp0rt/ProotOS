@@ -6,6 +6,8 @@
 
 #include "kernel.h"
 
+struct block_device;
+
 #define VFS_NAME_MAX 64
 #define VFS_FILE 1
 #define VFS_DIR 2
@@ -58,6 +60,7 @@ struct vfs_inode *vfs_create(const char *path, int type, int mode);
 int vfs_unlink(const char *path);
 int vfs_stat(const char *path, struct vfs_stat *out);
 int vfs_mount(const char *path, const char *type);
+int vfs_mount_block(const char *path, const char *type, struct block_device *dev);
 int vfs_umount(const char *path);
 struct block_device;
 struct vfs_super *ext2_mount(struct block_device *dev);

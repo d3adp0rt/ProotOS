@@ -7,6 +7,9 @@
 #include "proc.h"
 #include "initramfs.h"
 #include "block.h"
+#include "ahci.h"
+#include "ata.h"
+#include "virtio_blk.h"
 
 static struct vfs_inode *g_root;
 
@@ -235,13 +238,16 @@ int vfs_stat(const char *path, struct vfs_stat *out) {
 }
 
 int vfs_mount(const char *path, const char *type) {
+    return vfs_mount_block(path, type, ramdisk_device());
+}
+
+int vfs_mount_block(const char *path, const char *type, struct block_device *dev) {
     struct vfs_inode *mnt = vfs_lookup(path);
     if (!mnt || mnt->type != VFS_DIR)
         return -1;
     if (mnt->mounted)
         return -1;
     if (strcmp(type, "ext2") == 0) {
-        struct block_device *dev = ramdisk_device();
         if (!dev)
             return -1;
         struct vfs_super *sb = ext2_mount(dev);
@@ -357,7 +363,12 @@ void vfs_init(void) {
 
     const void *ext2_data = 0;
     size_t ext2_size = 0;
-    if (initramfs_find("ext2.img", &ext2_data, &ext2_size) == 0) {
+    struct block_device *disk = virtio_blk_device();
+    if (!disk) disk = ata_device();
+    if (!disk) disk = ahci_device();
+    if (disk) {
+        vfs_mount_block("/mnt", "ext2", disk);
+    } else if (initramfs_find("ext2.img", &ext2_data, &ext2_size) == 0) {
         if (ramdisk_init(ext2_data, ext2_size) == 0)
             vfs_mount("/mnt", "ext2");
     }

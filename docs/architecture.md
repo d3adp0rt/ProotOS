@@ -59,7 +59,8 @@ the HHDM.
 | User mode / processes | M5 (ring 3, fork/execve/wait, pipes) |
 | VFS/ramfs/FHS | M6a |
 | ext2 rw / mount | M6b |
-| Drivers | M7 |
+| PCI / virtio-blk | M7a |
+| AHCI/NVMe/USB/net/audio | M7b |
 | Drivers | M7 |
 | libc/userspace | M8 |
 | Network/packages | M9 |

@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M7a PCI + virtio-blk**: legacy PCI enumeration, virtio-blk I/O BAR driver
+  with a 256-entry split virtqueue, 8 MiB disk image, block-device plumbing and
+  ext2 mounted from `/dev/vda` at `/mnt`; AHCI/ATA PIO drivers are present as
+  fallbacks.
 - **M6b ext2**: block-device layer, 8 MiB ramdisk, ext2 mount, block/inode
   bitmaps, direct and single-indirect block mapping, file read/write, directory
   lookup/create/unlink, mount/umount, `/mnt` rw demo.
