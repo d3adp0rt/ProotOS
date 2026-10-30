@@ -148,6 +148,12 @@ static void fb_putc(char c) {
     unsigned char ch = (unsigned char)c;
     if (ch < 32 || ch >= 127)
         ch = '?';
+    /* Clear the whole cell first so space/backspace really erases. */
+    for (uint32_t yy = 0; yy < con.char_h; yy++) {
+        for (uint32_t xx = 0; xx < con.char_w; xx++) {
+            fb_putpixel(con.cursor_x + xx, con.cursor_y + yy, con.bg);
+        }
+    }
     const unsigned char *glyph = (const unsigned char *)font8x8_basic[ch];
     for (uint32_t row = 0; row < 8; row++) {
         for (uint32_t col = 0; col < 8; col++) {

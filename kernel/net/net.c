@@ -296,6 +296,20 @@ int net_http_get(const char *host, const char *path, char *out, size_t cap) {
         }
     }
     if (!body) return -1;
+    if (total >= 12 && out[0] == 'H') {
+        int code = (out[9] - '0') * 100 + (out[10] - '0') * 10 + (out[11] - '0');
+        if (code >= 300 && code < 400) {
+            for (size_t i = 0; i + 8 < total; i++) {
+                if ((out[i] == 'L' || out[i] == 'l') &&
+                    strncmp(out + i, "Location:", 9) == 0) {
+                    char *loc = out + i + 9;
+                    while (*loc == ' ') loc++;
+                    if (strncmp(loc, "https://", 8) == 0) return -2;
+                    break;
+                }
+            }
+        }
+    }
     size_t blen = total - (size_t)(body - out);
     memmove(out, body, blen);
     return (int)blen;

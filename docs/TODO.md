@@ -26,6 +26,13 @@
 3. `ciaddr`/`flags`/`option 50/54/61`, длина BOOTP >= 300.
 4. После ACK — обновление `g_ip/g_gw/g_dns` и повторный ARP.
 
+## ВЕРНУТЬСЯ: TLS / HTTPS
+
+`wget` supports HTTP/1.0 only. Domains returning 301/302 to `https://`
+(github.com, nexags.com.ru, ...) report `HTTPS redirect requires TLS`.
+Next: port mbedTLS/BearSSL or implement a minimal TLS 1.2/1.3 client over the
+existing TCP path, then add certificate verification.
+
 ## ВЕРНУТЬСЯ: остальное
 
 - UDP/TCP sockets, `ping`/`wget` userspace.

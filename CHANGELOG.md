@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Terminal erase fix**: framebuffer cells are cleared before glyph draw, so
+  backspace/space really erase characters.
+- **wget HTTPS diagnostics**: 3xx redirects to `https://` now report that TLS
+  is required instead of a bare failure.
 - **M9c ping/wget**: user `/bin/ping` (ICMP syscall) and `/bin/wget`
   (DNS + minimal TCP client + HTTP/1.0 GET). Fixed IP checksum double-write in
   TCP and enabled interrupts during blocking syscalls.
