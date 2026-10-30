@@ -33,6 +33,12 @@
 Next: port mbedTLS/BearSSL or implement a minimal TLS 1.2/1.3 client over the
 existing TCP path, then add certificate verification.
 
+## ВЕРНУТЬСЯ: remote ppkg
+
+Repos created: `prootos-registry`, `prootos-packages`, `prootos-pkg-hello`.
+`ppkg` still reads a local index (`/var/lib/ppkg/index`); remote fetch needs
+TLS/HTTPS. Registry flow: registry -> packages index -> `.pk` URL.
+
 ## ВЕРНУТЬСЯ: остальное
 
 - UDP/TCP sockets, `ping`/`wget` userspace.

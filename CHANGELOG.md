@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Package repositories**: public `prootos-registry`, `prootos-packages`
+  and `prootos-pkg-hello` on GitHub; local `ppkg` index and sample package.
 - **ppkg core**: `/bin/ppkg list|install`, tar-based `.pk` packages, local
   index at `/var/lib/ppkg/index`, VFS exec fallback so installed programs can
   run, and a `hello` sample package.

@@ -9,6 +9,11 @@ keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
 `cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
 Packages: `/bin/ppkg` installs tar-based `.pk` packages to the VFS; local index and `hello` sample.
 
+Package repositories:
+- https://github.com/d3adp0rt/prootos-registry
+- https://github.com/d3adp0rt/prootos-packages
+- https://github.com/d3adp0rt/prootos-pkg-hello
+
 ![status](https://img.shields.io/badge/status-M1-blue)
 
 ## Requirements
