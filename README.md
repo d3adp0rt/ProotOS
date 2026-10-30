@@ -3,11 +3,13 @@
 A from-scratch 64-bit operating system for x86_64 UEFI, built as a demo and
 research prototype. Monolithic kernel, own bootloader, own userspace.
 
-**Status: M3 — interrupts, timers and SMP.** The UEFI loader loads `kernel.elf`
-and a cpio initramfs from the ESP, builds page tables, exits boot services and
-jumps into the higher-half kernel. The kernel brings up serial/framebuffer
-consoles, IDT, buddy/slab/vmalloc, ACPI MADT, LAPIC/IOAPIC, PIC/PIT timer, RTC
-and boots all application processors via INIT-SIPI-SIPI.
+**Status: M4 — scheduler and kernel threads.** The UEFI loader loads
+`kernel.elf` and a cpio initramfs from the ESP, builds page tables, exits boot
+services and jumps into the higher-half kernel. The kernel brings up
+serial/framebuffer consoles, IDT, buddy/slab/vmalloc, ACPI MADT, LAPIC/IOAPIC,
+PIC/PIT timer, RTC, boots all application processors, and runs an EEVDF
+kernel-thread scheduler with nice, RT and exclusive classes, sleep/wakeup,
+wait queues, join and preemption.
 
 ![status](https://img.shields.io/badge/status-M1-blue)
 

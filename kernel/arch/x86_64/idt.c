@@ -102,5 +102,9 @@ void idt_init(void) {
 
     idtp.limit = sizeof(idt) - 1;
     idtp.base = (uint64_t)(uintptr_t)idt;
+    idt_load();
+}
+
+void idt_load(void) {
     __asm__ volatile("lidt %0" : : "m"(idtp) : "memory");
 }

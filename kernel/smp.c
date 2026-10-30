@@ -6,6 +6,7 @@
 #include "mm.h"
 #include "apic.h"
 #include "timer.h"
+#include "sched.h"
 
 #define AP_TRAMPOLINE_PHYS 0x8000ULL
 #define AP_PARAMS_PHYS 0x7000ULL
@@ -34,9 +35,7 @@ static void ap_main(struct ap_arg *arg) {
     lapic_init(&g_acpi);
     __atomic_add_fetch(&g_online, 1, __ATOMIC_SEQ_CST);
     kprintf("[smp] AP%u online (apic %u, id %u)\n", arg->index, arg->apic_id, lapic_id());
-    for (;;) {
-        __asm__ volatile("cli; hlt");
-    }
+    sched_init_ap();
 }
 
 uint32_t smp_online_cpus(void) {

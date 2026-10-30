@@ -70,6 +70,8 @@ set(KERNEL_C_SOURCES
     kernel/console.c
     kernel/acpi.c
     kernel/smp.c
+    kernel/sched/sched.c
+    kernel/sched/selftest.c
     kernel/lib/string.c
     kernel/lib/serial.c
     kernel/lib/kprintf.c
@@ -88,6 +90,7 @@ set(KERNEL_ASM_SOURCES
     kernel/arch/x86_64/entry.S
     kernel/arch/x86_64/isr.S
     kernel/arch/x86_64/irq.S
+    kernel/arch/x86_64/switch.S
     kernel/arch/x86_64/ap_blob.S
 )
 

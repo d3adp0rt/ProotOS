@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "kernel.h"
+#include "spinlock.h"
 #include "../third_party/fonts/font8x8_basic.h"
 
 #define VGA_TEXT ((volatile uint16_t *)0xb8000)
@@ -26,6 +27,8 @@ static struct {
     uint32_t fg;
     uint32_t bg;
 } con;
+
+static spinlock_t g_console_lock = SPINLOCK_INIT;
 
 static uint32_t pack_color(uint32_t rgb) {
     if (con.format == PROOT_FB_FORMAT_RGB) {
@@ -207,6 +210,8 @@ void console_putc(char c) {
 }
 
 void console_write(const char *s) {
+    uint64_t flags = spin_lock_irqsave(&g_console_lock);
     while (*s)
         console_putc(*s++);
+    spin_unlock_irqrestore(&g_console_lock, flags);
 }

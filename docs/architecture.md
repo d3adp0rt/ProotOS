@@ -55,7 +55,7 @@ the HHDM.
 | ACPI / LAPIC / IOAPIC | M3 |
 | PIC/PIT timer, IRQ, RTC | M3 |
 | SMP AP bring-up | M3 (4/4 in QEMU) |
-| Scheduler | M4 |
+| Scheduler / kernel threads | M4 (EEVDF, RT, exclusive) |
 | Processes/syscalls | M5 |
 | VFS/ext2 | M6 |
 | Drivers | M7 |

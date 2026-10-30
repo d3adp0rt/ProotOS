@@ -33,7 +33,8 @@ def main() -> int:
         "[prootos] kernel entered",
         "[ktest] M2 memory tests: PASS",
         "[smp] online CPUs: 4/4",
-        "M3 complete",
+        "[ktest] M4 scheduler tests: PASS",
+        "M4 complete",
     ]
     missing = [line for line in required if line not in out]
     if missing:

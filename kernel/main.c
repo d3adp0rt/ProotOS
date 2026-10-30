@@ -8,6 +8,7 @@
 #include "apic.h"
 #include "timer.h"
 #include "smp.h"
+#include "sched.h"
 
 static const char *memory_type_name(uint32_t type) {
     switch (type) {
@@ -171,8 +172,10 @@ void kmain(struct proot_bootinfo *bi) {
 
     smp_init(&acpi);
 
-    kprintf(
-        "\nM3 complete: ACPI, LAPIC/IOAPIC, PIC/PIT timer, IRQ dispatch, RTC and SMP are alive.\n");
-    kprintf("Halting. Next milestone: EEVDF scheduler and kernel threads.\n");
+    kprintf("[sched] starting M4 tests...\n");
+    struct thread *test = kthread_create(m4_selftest_thread, 0, "m4-test", SCHED_NORMAL, 0, 0);
+    if (!test) panic("cannot create M4 test thread");
+    sched_start();
+
     cpu_halt();
 }

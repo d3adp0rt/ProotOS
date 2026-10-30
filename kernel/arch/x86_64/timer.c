@@ -5,6 +5,7 @@
 #include "kernel.h"
 #include "timer.h"
 #include "apic.h"
+#include "sched.h"
 
 #define PIC1_CMD 0x20
 #define PIC1_DATA 0x21
@@ -78,8 +79,11 @@ void timer_sleep_ms(uint64_t ms) {
 }
 
 void irq_dispatch(struct trap_frame *tf) {
+    int need_resched = 0;
     if (tf->vector == 32) {
         timer_irq();
+        sched_tick();
+        need_resched = sched_need_resched();
     } else if (tf->vector == 33) {
         (void)inb(0x60); /* drain keyboard, driver arrives in M7 */
     } else if (tf->vector != 39 && tf->vector != 47) {
@@ -90,4 +94,5 @@ void irq_dispatch(struct trap_frame *tf) {
         outb(PIC2_CMD, 0x20);
     outb(PIC1_CMD, 0x20);
     lapic_eoi();
+    if (need_resched) sched_maybe_resched(need_resched);
 }

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M4 scheduler**: per-CPU EEVDF runqueues with nice weights, RT FIFO/RR and
+  `SCHED_EXCLUSIVE`, kernel threads, 16 KiB stacks, context switch, idle thread,
+  timer preemption, sleep/wakeup, wait queues, `kthread_join`, and M4 self-tests
+  (sleep accuracy, lost-wakeup-free wait queue, nice ratios, exclusive
+  starvation).
 - **M3 interrupts, timers and SMP**: ACPI RSDP/XSDT/MADT/HPET parsing, Local
   APIC and IOAPIC setup, PIC remap, 1 kHz PIT timer with IRQ dispatch, CMOS RTC,
   spinlocks, INIT-SIPI-SIPI AP bring-up through a 16→32→64-bit trampoline at
