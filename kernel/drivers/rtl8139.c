@@ -19,6 +19,7 @@ static uint64_t g_rx_phys;
 static uint64_t g_tx_phys;
 static int g_tx_index;
 static int g_ready;
+static uint16_t g_capr;
 
 static inline void outb(uint16_t p, uint8_t v) {
     __asm__ volatile("outb %0,%1" ::"a"(v), "Nd"(p));
@@ -81,6 +82,28 @@ int rtl8139_init(void) {
     g_ready = 1;
     kprintf("[rtl8139] RX/TX enabled\n");
     return 0;
+}
+
+int rtl8139_poll(void *frame, size_t cap, size_t *out_len) {
+    if (!g_ready || !frame) return 0;
+    uint16_t cbr = (uint16_t)inl(g_io + 0x3a);
+    if (cbr == g_capr) return 0;
+    uint8_t *hdr = g_rx + g_capr;
+    uint16_t status = *(uint16_t *)hdr;
+    uint16_t len = *(uint16_t *)(hdr + 2);
+    if (len < 4 || len > 1600) { g_capr = 0; outl(g_io + 0x38, 0); return -1; }
+    uint16_t payload = (uint16_t)(len - 4);
+    if (payload > cap) payload = (uint16_t)cap;
+    uint16_t off = (uint16_t)(g_capr + 4);
+    for (uint16_t i = 0; i < payload; i++) {
+        ((uint8_t *)frame)[i] = g_rx[(off + i) % 8192];
+    }
+    if (out_len) *out_len = payload;
+    g_capr = (uint16_t)((g_capr + 4 + len + 3) & ~3u);
+    if (g_capr >= 8192) g_capr -= 8192;
+    outl(g_io + 0x38, (uint32_t)(g_capr - 16));
+    (void)status;
+    return 1;
 }
 
 int rtl8139_send(const void *frame, size_t len) {

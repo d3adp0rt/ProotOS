@@ -8,4 +8,5 @@
 
 int rtl8139_init(void);
 int rtl8139_send(const void *frame, size_t len);
+int rtl8139_poll(void *frame, size_t cap, size_t *out_len);
 const uint8_t *rtl8139_mac(void);

@@ -86,6 +86,7 @@ set(KERNEL_C_SOURCES
     kernel/drivers/keyboard.c
     kernel/drivers/rtl8139.c
     kernel/drivers/misc.c
+    kernel/net/net.c
     kernel/lib/string.c
     kernel/lib/serial.c
     kernel/lib/kprintf.c

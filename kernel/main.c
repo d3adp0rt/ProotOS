@@ -20,6 +20,7 @@
 #include "keyboard.h"
 #include "rtl8139.h"
 #include "misc.h"
+#include "net.h"
 
 static const char *memory_type_name(uint32_t type) {
     switch (type) {
@@ -168,7 +169,10 @@ void kmain(struct proot_bootinfo *bi) {
         if (!ata_device()) ahci_init();
     }
     misc_init();
+    int net_ready = 0;
     if (rtl8139_init() == 0) {
+        net_init();
+        net_ready = 1;
         static const uint8_t test_frame[60] = {
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x52, 0x54, 0x00, 0x12, 0x34, 0x56,
             0x08, 0x06, 0x00, 0x01, 0x08, 0x00, 0x06, 0x04, 0x00, 0x01, 0x52, 0x54,
@@ -202,6 +206,7 @@ void kmain(struct proot_bootinfo *bi) {
     kprintf("[time] uptime ticks=%llu (~1 second)\n", (unsigned long long)timer_ticks());
     timer_sleep_ms(10);
     kprintf("[time] uptime ticks=%llu (+10 ms)\n", (unsigned long long)timer_ticks());
+    if (net_ready) net_ping();
 
     smp_init(&acpi);
     process_init();
