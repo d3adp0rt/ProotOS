@@ -215,6 +215,85 @@ static int tcp_recv(uint8_t *out, size_t cap, size_t *out_len, uint16_t sport, u
     return -1;
 }
 
+
+struct tcp_sock {
+    uint8_t ip[4];
+    uint16_t sport, dport;
+    uint32_t seq, ack;
+    int open;
+};
+static struct tcp_sock g_sock;
+static uint16_t g_sock_port = 42000;
+static uint8_t g_tcp_buf[4096];
+static size_t g_tcp_len, g_tcp_pos;
+
+int tcp_connect(const uint8_t ip[4], uint16_t port) {
+    g_sock.ip[0]=ip[0]; g_sock.ip[1]=ip[1]; g_sock.ip[2]=ip[2]; g_sock.ip[3]=ip[3];
+    g_sock.sport = g_sock_port++;
+    if (g_sock_port > 49000) g_sock_port = 42000;
+    g_sock.dport = port;
+    g_sock.seq = 0x2000;
+    g_sock.ack = 0;
+    g_sock.open = 0;
+    g_tcp_len = g_tcp_pos = 0;
+    if (tcp_send(g_gw_mac, ip, g_sock.sport, port, g_sock.seq, 0, TCP_SYN, 0, 0) != 0) return -1;
+    uint8_t flags; uint32_t rseq, rack; size_t n;
+    if (tcp_recv(0, 0, &n, port, g_sock.sport, &flags, &rseq, &rack, 3000) != 0) return -1;
+    if (!(flags & TCP_SYN) || !(flags & TCP_ACK) || rack != g_sock.seq + 1) return -1;
+    g_sock.ack = rseq + 1;
+    g_sock.seq++;
+    tcp_send(g_gw_mac, ip, g_sock.sport, port, g_sock.seq, g_sock.ack, TCP_ACK, 0, 0);
+    g_sock.open = 1;
+    return 0;
+}
+
+int tcp_conn_write(const void *data, size_t len) {
+    if (!g_sock.open) return -1;
+    if (tcp_send(g_gw_mac, g_sock.ip, g_sock.sport, g_sock.dport, g_sock.seq, g_sock.ack,
+                 TCP_PSH | TCP_ACK, data, len) != 0) return -1;
+    g_sock.seq += (uint32_t)len;
+    return (int)len;
+}
+
+int tcp_conn_read(void *data, size_t len) {
+    if (!g_sock.open) return -1;
+    if (g_tcp_pos < g_tcp_len) {
+        size_t n = g_tcp_len - g_tcp_pos;
+        if (n > len) n = len;
+        memcpy(data, g_tcp_buf + g_tcp_pos, n);
+        g_tcp_pos += n;
+        return (int)n;
+    }
+    uint8_t flags; uint32_t rseq, rack; size_t n = 0;
+    for (int i = 0; i < 6000; i++) {
+        if (tcp_recv(g_tcp_buf, sizeof(g_tcp_buf), &n, g_sock.dport, g_sock.sport, &flags, &rseq,
+                     &rack, 1) == 0) {
+            if (flags & TCP_RST) { g_sock.open = 0; return -1; }
+            if (n) {
+                g_sock.ack = rseq + (uint32_t)n;
+                g_tcp_len = n;
+                g_tcp_pos = 0;
+                tcp_send(g_gw_mac, g_sock.ip, g_sock.sport, g_sock.dport, g_sock.seq, g_sock.ack,
+                         TCP_ACK, 0, 0);
+                size_t out = n;
+                if (out > len) out = len;
+                memcpy(data, g_tcp_buf, out);
+                g_tcp_pos = out;
+                return (int)out;
+            }
+            if (flags & TCP_FIN) { g_sock.open = 0; return 0; }
+        }
+    }
+    return -1;
+}
+
+void tcp_conn_close(void) {
+    if (!g_sock.open) return;
+    tcp_send(g_gw_mac, g_sock.ip, g_sock.sport, g_sock.dport, g_sock.seq, g_sock.ack,
+             TCP_FIN | TCP_ACK, 0, 0);
+    g_sock.open = 0;
+}
+
 int net_ping_ip(const uint8_t ip[4]) {
     uint8_t frame[128];
     memset(frame, 0, sizeof(frame));

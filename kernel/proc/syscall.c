@@ -30,6 +30,7 @@
 #define SYS_NET_PING 81
 #define SYS_NET_HTTP 82
 #define SYS_CLEAR 83
+#define SYS_NET_HTTPS 84
 #define SYS_PIPE 22
 #define SYS_FORK 57
 #define SYS_EXECVE 59
@@ -238,6 +239,20 @@ static long sys_net_http(struct process *p, uint64_t uhost, uint64_t upath, uint
     return n;
 }
 
+static long sys_net_https(struct process *p, uint64_t uhost, uint64_t upath, uint64_t uout,
+                         uint64_t cap) {
+    char host[96], path[128];
+    if (user_copy_from(p, host, uhost, sizeof(host) - 1) != 0) return -14;
+    if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0) return -14;
+    host[sizeof(host) - 1] = path[sizeof(path) - 1] = 0;
+    char *buf = kmalloc((size_t)cap);
+    if (!buf) return -1;
+    int n = net_https_get(host, path, buf, (size_t)cap);
+    if (n > 0 && user_copy_to(p, uout, buf, (size_t)n) != 0) n = -14;
+    kfree(buf);
+    return n;
+}
+
 static long sys_mount(struct process *p, uint64_t upath, uint64_t utype) {
     char path[128], type[16];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
@@ -322,6 +337,9 @@ void syscall_dispatch(struct trap_frame *tf) {
         break;
     case SYS_NET_HTTP:
         ret = sys_net_http(p, tf->rdi, tf->rsi, tf->rdx, tf->r10);
+        break;
+    case SYS_NET_HTTPS:
+        ret = sys_net_https(p, tf->rdi, tf->rsi, tf->rdx, tf->r10);
         break;
     case SYS_CLEAR:
         console_clear();

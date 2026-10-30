@@ -46,7 +46,10 @@ static int extract_tar(const char *path) {
     return 0;
 }
 
+#define REGISTRY "https://github.com/d3adp0rt/prootos-registry"
+
 static int find_pkg(const char *want, char *path, size_t cap) {
+    (void)cap;
     int fd = open("/var/lib/ppkg/index", 0, 0);
     if (fd < 0) return 0;
     char line[256];
@@ -54,14 +57,15 @@ static int find_pkg(const char *want, char *path, size_t cap) {
     while (read(fd, &line[n], 1) == 1) {
         if (line[n] == '\n') {
             line[n] = 0;
-            char *sp = line;
-            while (*sp && *sp != ' ') sp++;
-            if (*sp) *sp++ = 0;
-            if (strcmp(line, want) == 0) {
-                strcpy(path, sp);
-                close(fd);
-                return 1;
-            }
+            char *name = line;
+            char *sp1 = name; while (*sp1 && *sp1 != ' ') sp1++;
+            if (*sp1) *sp1++ = 0;
+            char *ver = sp1; char *sp2 = ver; while (*sp2 && *sp2 != ' ') sp2++;
+            if (*sp2) *sp2++ = 0;
+            char *deps = sp2; char *sp3 = deps; while (*sp3 && *sp3 != ' ') sp3++;
+            if (*sp3) *sp3++ = 0;
+            (void)ver; (void)deps;
+            if (strcmp(name, want) == 0) { strcpy(path, sp3); close(fd); return 1; }
             n = 0;
         } else if (n < (int)sizeof(line) - 1) n++;
     }
@@ -71,6 +75,25 @@ static int find_pkg(const char *want, char *path, size_t cap) {
 
 int main(int argc, char **argv) {
     if (argc < 2) { printf("ppkg: usage: ppkg list|install NAME\n"); return 1; }
+    if (strcmp(argv[1], "search") == 0) {
+        if (argc < 3) { printf("ppkg: search TERM\n"); return 1; }
+        int fd = open("/var/lib/ppkg/index", 0, 0);
+        if (fd < 0) { printf("ppkg: no index\n"); return 1; }
+        char line[256]; int n = 0;
+        while (read(fd, &line[n], 1) == 1) {
+            if (line[n] == '\n') {
+                line[n] = 0;
+                if (line[0] && line[0] != '#' && strstr(line, argv[2])) printf("%s\n", line);
+                n = 0;
+            } else if (n < (int)sizeof(line) - 1) n++;
+        }
+        close(fd);
+        return 0;
+    }
+    if (strcmp(argv[1], "update") == 0) {
+        printf("ppkg: registry %s (remote fetch pending multi-TLS)\n", REGISTRY);
+        return 0;
+    }
     if (strcmp(argv[1], "list") == 0) {
         int fd = open("/var/lib/ppkg/index", 0, 0);
         if (fd < 0) { printf("ppkg: no index\n"); return 1; }

@@ -48,7 +48,7 @@ def main() -> int:
         "[net] ICMP echo reply from 10.0.2.2",
         "[net] DNS example.com ->",
         "ping 10.0.2.2: reply",
-        "wget: ",
+        "wget: 577 bytes (https)",
         "ppkg: installed hello",
         "ProotOS shell (M8)",
         "M8 libc + shell + /bin/echo works",

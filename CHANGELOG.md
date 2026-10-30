@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **TLS/HTTPS**: mbedTLS 2.28 ported into the kernel (custom freestanding
+  config, platform callbacks, hardware entropy), TCP socket API with receive
+  buffering, TLS 1.2 client and `net_https_get`; `/bin/wget` prefers HTTPS.
+  Certificate verification is disabled in this first pass.
+- **ppkg search/update**: search built-in, dependency field parsing, hardcoded
+  registry link, source-build stub message.
 - **Package repositories**: public `prootos-registry`, `prootos-packages`
   and `prootos-pkg-hello` on GitHub; local `ppkg` index and sample package.
 - **ppkg core**: `/bin/ppkg list|install`, tar-based `.pk` packages, local

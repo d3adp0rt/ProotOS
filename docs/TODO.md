@@ -28,6 +28,14 @@
 
 ## ВЕРНУТЬСЯ: TLS / HTTPS
 
+TLS 1.2 works with mbedTLS for one HTTPS request per boot. Known gaps:
+- certificate verification is `MBEDTLS_SSL_VERIFY_NONE`;
+- a second HTTPS connection in the same boot can fail (multi-session state);
+- TLS 1.3 not enabled.
+Fix multi-session/TLS1.3 and add CA store before remote ppkg.
+
+## ВЕРНУТЬСЯ: TLS / HTTPS (old notes)
+
 `wget` supports HTTP/1.0 only. Domains returning 301/302 to `https://`
 (github.com, nexags.com.ru, ...) report `HTTPS redirect requires TLS`.
 Next: port mbedTLS/BearSSL or implement a minimal TLS 1.2/1.3 client over the

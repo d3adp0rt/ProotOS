@@ -173,6 +173,62 @@ foreach(src IN LISTS KERNEL_ASM_SOURCES)
     list(APPEND KERNEL_OBJECTS ${obj})
 endforeach()
 
+
+# mbedTLS (freestanding kernel build)
+file(GLOB MBEDTLS_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/third_party/mbedtls/library/*.c)
+list(FILTER MBEDTLS_SOURCES EXCLUDE REGEX "net_sockets.c|timing.c")
+set(MBEDTLS_OBJECTS)
+foreach(src IN LISTS MBEDTLS_SOURCES)
+    get_filename_component(name ${src} NAME_WE)
+    set(obj ${KERNEL_OBJ_DIR}/mbedtls_${name}.o)
+    add_custom_command(
+        OUTPUT ${obj}
+        COMMAND ${CLANG_EXECUTABLE}
+            -target x86_64-unknown-none-elf -std=c99 -ffreestanding
+            -fno-stack-protector -fno-builtin -mno-red-zone -mcmodel=kernel
+            -mno-sse -mno-mmx -mno-80387 -O2 -g -w
+            -I${CMAKE_SOURCE_DIR}/third_party/mbedtls/port
+            -I${CMAKE_SOURCE_DIR}/third_party/mbedtls/include
+            -I${CMAKE_SOURCE_DIR}/kernel/include
+            -I${CMAKE_SOURCE_DIR}/boot
+            -c ${src} -o ${obj}
+        DEPENDS ${src} ${CMAKE_SOURCE_DIR}/third_party/mbedtls/prootos_config.h
+        COMMENT "CC [mbedtls] ${name}.c"
+        VERBATIM)
+    list(APPEND MBEDTLS_OBJECTS ${obj})
+endforeach()
+
+add_custom_command(
+    OUTPUT ${KERNEL_OBJ_DIR}/mbedtls_port.o
+    COMMAND ${CLANG_EXECUTABLE}
+        -target x86_64-unknown-none-elf -std=c23 -ffreestanding
+        -fno-stack-protector -fno-builtin -mno-red-zone -mcmodel=kernel
+        -mno-sse -mno-mmx -mno-80387 -O2 -g -Wall -Wextra
+        -I${CMAKE_SOURCE_DIR}/third_party/mbedtls/port
+        -I${CMAKE_SOURCE_DIR}/third_party/mbedtls/include
+        -I${CMAKE_SOURCE_DIR}/kernel/include -I${CMAKE_SOURCE_DIR}/boot
+        -c ${CMAKE_SOURCE_DIR}/kernel/lib/mbedtls_port.c -o ${KERNEL_OBJ_DIR}/mbedtls_port.o
+    DEPENDS ${CMAKE_SOURCE_DIR}/kernel/lib/mbedtls_port.c
+    COMMENT "CC [mbedtls] port"
+    VERBATIM)
+list(APPEND MBEDTLS_OBJECTS ${KERNEL_OBJ_DIR}/mbedtls_port.o)
+
+
+add_custom_command(
+    OUTPUT ${KERNEL_OBJ_DIR}/https.o
+    COMMAND ${CLANG_EXECUTABLE}
+        -target x86_64-unknown-none-elf -std=c23 -ffreestanding
+        -fno-stack-protector -fno-builtin -mno-red-zone -mcmodel=kernel
+        -mno-sse -mno-mmx -mno-80387 -O2 -g -w
+        -I${CMAKE_SOURCE_DIR}/third_party/mbedtls/port
+        -I${CMAKE_SOURCE_DIR}/third_party/mbedtls/include
+        -I${CMAKE_SOURCE_DIR}/kernel/include -I${CMAKE_SOURCE_DIR}/boot
+        -c ${CMAKE_SOURCE_DIR}/kernel/net/https.c -o ${KERNEL_OBJ_DIR}/https.o
+    DEPENDS ${CMAKE_SOURCE_DIR}/kernel/net/https.c
+    COMMENT "CC [kernel] https.c"
+    VERBATIM)
+list(APPEND MBEDTLS_OBJECTS ${KERNEL_OBJ_DIR}/https.o)
+
 add_custom_command(
     OUTPUT ${IMAGE_DIR}/kernel.elf
     COMMAND ${LD_LLD_EXECUTABLE}
@@ -181,8 +237,8 @@ add_custom_command(
         -z max-page-size=4096
         -Map=${CMAKE_BINARY_DIR}/kernel.map
         -o ${IMAGE_DIR}/kernel.elf
-        ${KERNEL_OBJECTS}
-    DEPENDS ${KERNEL_OBJECTS} ${CMAKE_SOURCE_DIR}/kernel/arch/x86_64/linker.ld
+        ${KERNEL_OBJECTS} ${MBEDTLS_OBJECTS}
+    DEPENDS ${KERNEL_OBJECTS} ${MBEDTLS_OBJECTS} ${CMAKE_SOURCE_DIR}/kernel/arch/x86_64/linker.ld
     COMMENT "LD [kernel] kernel.elf"
     VERBATIM)
 

@@ -5,6 +5,7 @@
 #include "kernel.h"
 #include <stdarg.h>
 
+
 static void utoa(unsigned long long value, unsigned base, int upper, char *out, size_t cap) {
     static const char lower[] = "0123456789abcdef";
     static const char upper_digits[] = "0123456789ABCDEF";
@@ -164,6 +165,11 @@ void kprintf(const char *fmt, ...) {
     va_start(ap, fmt);
     kvprintf(fmt, ap);
     va_end(ap);
+}
+
+int kvsnprintf(char *out, size_t cap, const char *fmt, va_list ap) {
+    format(out, cap, fmt, ap);
+    return (int)strlen(out);
 }
 
 int ksnprintf(char *out, size_t cap, const char *fmt, ...) {

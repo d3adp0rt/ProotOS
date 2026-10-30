@@ -74,3 +74,22 @@ char *strcpy(char *dst, const char *src) {
     while ((*d++ = *src++)) { }
     return dst;
 }
+
+char *strstr(const char *hay, const char *needle) {
+    if (!*needle) return (char *)hay;
+    for (; *hay; hay++) {
+        const char *a = hay, *b = needle;
+        while (*a && *b && *a == *b) { a++; b++; }
+        if (!*b) return (char *)hay;
+    }
+    return 0;
+}
+char *strchr(const char *s, int c) {
+    while (*s) { if (*s == (char)c) return (char *)s; s++; }
+    return (c == 0) ? (char *)s : 0;
+}
+char *strrchr(const char *s, int c) {
+    const char *last = 0;
+    while (*s) { if (*s == (char)c) last = s; s++; }
+    return (c == 0) ? (char *)s : (char *)last;
+}

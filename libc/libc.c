@@ -268,3 +268,13 @@ long net_http_get(const char *host, const char *path, char *buf, size_t cap) {
 }
 
 int clear_screen(void) { return (int)syscall0(83); }
+
+long net_https_get(const char *host, const char *path, char *buf, size_t cap) {
+    return syscall4(84, (long)host, (long)path, (long)buf, (long)cap);
+}
+
+char *strstr(const char *h, const char *n) {
+    if (!*n) return (char *)h;
+    for (; *h; h++) { const char *a=h,*b=n; while (*a && *b && *a==*b) {a++;b++;} if (!*b) return (char*)h; }
+    return 0;
+}

@@ -3,11 +3,12 @@
 A from-scratch 64-bit operating system for x86_64 UEFI, built as a demo and
 research prototype. Monolithic kernel, own bootloader, own userspace.
 
-**Status: M9d — ppkg + TLS pending.** The kernel brings up consoles, IDT, memory,
+**Status: M9d — TLS + ppkg.** The kernel brings up consoles, IDT, memory,
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
 `cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
-Packages: `/bin/ppkg` installs tar-based `.pk` packages to the VFS; local index and `hello` sample.
+Packages: `/bin/ppkg` installs tar-based `.pk` packages to the VFS; local index, `search`, dependency fields and `hello` sample.
+TLS: mbedTLS 2.28 client, TLS 1.2, HTTPS wget (certificate verification currently disabled).
 
 Package repositories:
 - https://github.com/d3adp0rt/prootos-registry
