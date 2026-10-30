@@ -3,6 +3,7 @@
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/debug.h"
+#include "mbedtls/error.h"
 #include "kernel.h"
 #include "timer.h"
 
@@ -54,7 +55,12 @@ int net_https_get(const char *host, const char *path, char *out, size_t cap) {
     mbedtls_ssl_set_bio(&ssl, 0, bio_send, bio_recv, 0);
 
     ret = mbedtls_ssl_handshake(&ssl);
-    if (ret != 0) { kprintf("[https] handshake %d\n", ret); goto fail; }
+    if (ret != 0) {
+        char eb[128];
+        mbedtls_strerror(ret, eb, sizeof(eb));
+        kprintf("[https] handshake %d: %s\n", ret, eb);
+        goto fail;
+    }
 
     char req[256];
     int rl = ksnprintf(req, sizeof(req),

@@ -35,7 +35,9 @@ TLS 1.2 works with mbedTLS for one HTTPS request per boot. Known gaps:
 - TLS 1.3 not enabled.
 Fix multi-session/TLS1.3, add CA store, then enable remote ppkg update.
 Remote ppkg code path exists (`ppkg update` -> registry bundle over HTTPS) but is
-not enabled in the shell demo until multi-session is fixed.
+not enabled in the shell demo until multi-session is fixed. ECDSA-only cipher
+selection makes the first HTTPS request reliable; a second request may still
+see a different (Ed25519/RSA-PSS) chain and fail X.509 parsing.
 
 ## ВЕРНУТЬСЯ: TLS / HTTPS (old notes)
 

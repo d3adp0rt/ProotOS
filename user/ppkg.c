@@ -97,6 +97,9 @@ int main(int argc, char **argv) {
         if (!bundle) return 1;
         int n = net_https_get("raw.githubusercontent.com",
                               "/d3adp0rt/prootos-registry/main/registry.tar", bundle, 32768);
+        if (n <= 0)
+            n = net_https_get("raw.githubusercontent.com",
+                              "/d3adp0rt/prootos-registry/main/registry.tar", bundle, 32768);
         if (n <= 0) { printf("ppkg: update failed (%d)\n", n); free(bundle); return 1; }
         int fd = open("/var/lib/ppkg/registry.tar", 0x242, 0644);
         if (fd < 0) { free(bundle); return 1; }

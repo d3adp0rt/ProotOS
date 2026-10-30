@@ -7,6 +7,7 @@ int main(int argc, char **argv) {
     char buf[8192];
     int n = net_https_get(host, path, buf, sizeof(buf));
     const char *proto = "https";
+    if (n <= 0) n = net_https_get(host, path, buf, sizeof(buf));
     if (n <= 0) {
         n = net_http_get(host, path, buf, sizeof(buf));
         proto = "http";
