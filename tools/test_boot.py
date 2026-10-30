@@ -40,7 +40,9 @@ def main() -> int:
         "ProotOS initramfs",
         "vfs write/read works",
         "fs test done",
-        "M6a complete",
+        "ext2 write/read works",
+        "ext2 test done",
+        "M6b complete",
     ]
     missing = [line for line in required if line not in out]
     if missing:

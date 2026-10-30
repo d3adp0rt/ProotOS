@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M6b ext2**: block-device layer, 8 MiB ramdisk, ext2 mount, block/inode
+  bitmaps, direct and single-indirect block mapping, file read/write, directory
+  lookup/create/unlink, mount/umount, `/mnt` rw demo.
 - **M6a VFS/ramfs**: ramfs root unpacked from cpio initramfs, classic FHS
   directories, `/proc/meminfo`, `/proc/uptime`, `/dev/console`, `/dev/null`,
   path lookup, create/mkdir/unlink, read/write, fd-backed open/close/lseek,

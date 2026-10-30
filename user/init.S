@@ -94,6 +94,47 @@ _start:
     movq $fs_done_end - fs_done, %rdx
     int $0x80
 
+    /* ext2 on /mnt: create/write/read */
+    movq $6, %rax
+    leaq ext2_path(%rip), %rdi
+    movq $0x42, %rsi
+    movq $0644, %rdx
+    int $0x80
+    movq %rax, %r12
+    movq $1, %rax
+    movq %r12, %rdi
+    leaq ext2_msg(%rip), %rsi
+    movq $ext2_end - ext2_msg, %rdx
+    int $0x80
+    movq $10, %rax
+    movq %r12, %rdi
+    xorq %rsi, %rsi
+    xorq %rdx, %rdx
+    int $0x80
+    movq $0, %rax
+    movq %r12, %rdi
+    leaq buf(%rip), %rsi
+    movq $255, %rdx
+    int $0x80
+    movq %rax, %r13
+    movq $1, %rax
+    movq $1, %rdi
+    leaq buf(%rip), %rsi
+    movq %r13, %rdx
+    int $0x80
+    movq $3, %rax
+    movq %r12, %rdi
+    int $0x80
+    movq $9, %rax
+    leaq ext2_path(%rip), %rdi
+    int $0x80
+
+    movq $1, %rax
+    movq $1, %rdi
+    leaq ext2_done(%rip), %rsi
+    movq $ext2_done_end - ext2_done, %rdx
+    int $0x80
+
     movq $60, %rax
     xorq %rdi, %rdi
     int $0x80
@@ -133,6 +174,14 @@ vfs_end:
 fs_done:
     .ascii "fs test done\n"
 fs_done_end:
+ext2_path:
+    .asciz "/mnt/test"
+ext2_msg:
+    .ascii "ext2 write/read works\n"
+ext2_end:
+ext2_done:
+    .ascii "ext2 test done\n"
+ext2_done_end:
 
 .section .bss, "aw", @nobits
 .align 16

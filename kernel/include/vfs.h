@@ -59,3 +59,5 @@ int vfs_unlink(const char *path);
 int vfs_stat(const char *path, struct vfs_stat *out);
 int vfs_mount(const char *path, const char *type);
 int vfs_umount(const char *path);
+struct block_device;
+struct vfs_super *ext2_mount(struct block_device *dev);

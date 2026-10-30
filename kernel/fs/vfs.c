@@ -6,6 +6,7 @@
 #include "mm.h"
 #include "proc.h"
 #include "initramfs.h"
+#include "block.h"
 
 static struct vfs_inode *g_root;
 
@@ -234,14 +235,30 @@ int vfs_stat(const char *path, struct vfs_stat *out) {
 }
 
 int vfs_mount(const char *path, const char *type) {
-    (void)path;
-    (void)type;
+    struct vfs_inode *mnt = vfs_lookup(path);
+    if (!mnt || mnt->type != VFS_DIR)
+        return -1;
+    if (mnt->mounted)
+        return -1;
+    if (strcmp(type, "ext2") == 0) {
+        struct block_device *dev = ramdisk_device();
+        if (!dev)
+            return -1;
+        struct vfs_super *sb = ext2_mount(dev);
+        if (!sb)
+            return -1;
+        mnt->mounted = sb;
+        return 0;
+    }
     return -1;
 }
 
 int vfs_umount(const char *path) {
-    (void)path;
-    return -1;
+    struct vfs_inode *mnt = vfs_lookup(path);
+    if (!mnt || !mnt->mounted)
+        return -1;
+    mnt->mounted = 0;
+    return 0;
 }
 
 int process_open(const char *path, int flags) {
@@ -337,5 +354,13 @@ void vfs_init(void) {
     initramfs_iterate(unpack_cb, 0);
     make_proc();
     make_dev();
+
+    const void *ext2_data = 0;
+    size_t ext2_size = 0;
+    if (initramfs_find("ext2.img", &ext2_data, &ext2_size) == 0) {
+        if (ramdisk_init(ext2_data, ext2_size) == 0)
+            vfs_mount("/mnt", "ext2");
+    }
+
     kprintf("[vfs] ramfs root: initramfs unpacked, FHS + /proc + /dev ready\n");
 }

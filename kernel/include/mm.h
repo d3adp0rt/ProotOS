@@ -8,7 +8,7 @@
 
 #define PAGE_SIZE 4096ULL
 #define PAGE_SHIFT 12
-#define MAX_ORDER 10
+#define MAX_ORDER 12
 #define MAX_ORDER_PAGES (1ULL << MAX_ORDER)
 #define PMM_MAX_PHYS (64ULL * 1024 * 1024 * 1024)
 

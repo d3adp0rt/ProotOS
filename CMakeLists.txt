@@ -77,6 +77,8 @@ set(KERNEL_C_SOURCES
     kernel/proc/syscall.c
     kernel/proc/pipe.c
     kernel/fs/vfs.c
+    kernel/fs/ramdisk.c
+    kernel/fs/ext2.c
     kernel/lib/string.c
     kernel/lib/serial.c
     kernel/lib/kprintf.c
@@ -204,13 +206,24 @@ add_custom_command(
     VERBATIM)
 
 set(INITRAMFS_STAGE ${CMAKE_BINARY_DIR}/initramfs-root)
+set(EXT2_IMG ${CMAKE_BINARY_DIR}/ext2.img)
+add_custom_command(
+    OUTPUT ${EXT2_IMG}
+    COMMAND dd if=/dev/zero of=${EXT2_IMG} bs=1M count=8 status=none
+    COMMAND mke2fs -q -F -t ext2 -b 1024 -I 128
+        -O ^extent,^64bit,^metadata_csum,^flex_bg,^dir_index
+        -L PROOTFS ${EXT2_IMG}
+    COMMENT "GEN ext2.img"
+    VERBATIM)
+
 add_custom_command(
     OUTPUT ${INITRAMFS_STAGE}/init
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${INITRAMFS_STAGE}
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/initramfs ${INITRAMFS_STAGE}
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/init.elf ${INITRAMFS_STAGE}/init
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/hello.elf ${INITRAMFS_STAGE}/hello
-    DEPENDS ${USER_DIR}/init.elf ${USER_DIR}/hello.elf ${INITRAMFS_FILES}
+    COMMAND ${CMAKE_COMMAND} -E copy ${EXT2_IMG} ${INITRAMFS_STAGE}/ext2.img
+    DEPENDS ${USER_DIR}/init.elf ${USER_DIR}/hello.elf ${EXT2_IMG} ${INITRAMFS_FILES}
     COMMENT "STAGE initramfs"
     VERBATIM)
 
