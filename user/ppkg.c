@@ -23,6 +23,7 @@ static int extract_tar(const char *path) {
         char type = (char)h[156];
         if (name[0] == 0) break;
         if (strncmp(name, "usr/", 4) == 0) { mkdir("usr", 0755); mkdir("usr/bin", 0755); }
+        if (strncmp(name, "packages/", 9) == 0) mkdir("packages", 0755);
         if (type == '5') {
             mkdir(name, 0755);
             continue;
@@ -91,7 +92,20 @@ int main(int argc, char **argv) {
         return 0;
     }
     if (strcmp(argv[1], "update") == 0) {
-        printf("ppkg: registry %s (remote fetch pending multi-TLS)\n", REGISTRY);
+        printf("ppkg: updating from %s\n", REGISTRY);
+        char *bundle = malloc(32768);
+        if (!bundle) return 1;
+        int n = net_https_get("raw.githubusercontent.com",
+                              "/d3adp0rt/prootos-registry/main/registry.tar", bundle, 32768);
+        if (n <= 0) { printf("ppkg: update failed (%d)\n", n); free(bundle); return 1; }
+        int fd = open("/var/lib/ppkg/registry.tar", 0x242, 0644);
+        if (fd < 0) { free(bundle); return 1; }
+        if (write(fd, bundle, (size_t)n) != n) { close(fd); free(bundle); return 1; }
+        close(fd);
+        free(bundle);
+        mkdir("/var/lib/ppkg/packages", 0755);
+        if (extract_tar("/var/lib/ppkg/registry.tar") != 0) return 1;
+        printf("ppkg: registry updated\n");
         return 0;
     }
     if (strcmp(argv[1], "list") == 0) {

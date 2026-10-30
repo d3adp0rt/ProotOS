@@ -278,3 +278,14 @@ char *strstr(const char *h, const char *n) {
     for (; *h; h++) { const char *a=h,*b=n; while (*a && *b && *a==*b) {a++;b++;} if (!*b) return (char*)h; }
     return 0;
 }
+
+static unsigned char g_heap[131072];
+static size_t g_heap_used;
+void *malloc(size_t n) {
+    n = (n + 15) & ~(size_t)15;
+    if (g_heap_used + n > sizeof(g_heap)) return 0;
+    void *p = g_heap + g_heap_used;
+    g_heap_used += n;
+    return p;
+}
+void free(void *p) { (void)p; }

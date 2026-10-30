@@ -26,6 +26,8 @@ int unlink(const char *path);
 int shutdown_os(void);
 int reboot_os(void);
 int clear_screen(void);
+void *malloc(size_t);
+void free(void *);
 
 size_t strlen(const char *s);
 int strcmp(const char *a, const char *b);
