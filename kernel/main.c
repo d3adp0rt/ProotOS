@@ -9,6 +9,9 @@
 #include "timer.h"
 #include "smp.h"
 #include "sched.h"
+#include "gdt.h"
+#include "initramfs.h"
+#include "proc.h"
 
 static const char *memory_type_name(uint32_t type) {
     switch (type) {
@@ -142,7 +145,9 @@ void kmain(struct proot_bootinfo *bi) {
 
     print_memory_map(bi);
 
+    initramfs_init(bi);
     idt_init();
+    gdt_init();
     kprintf("[cpu] IDT installed, exceptions armed\n");
 
     pmm_init(bi);
@@ -171,8 +176,9 @@ void kmain(struct proot_bootinfo *bi) {
     kprintf("[time] uptime ticks=%llu (+10 ms)\n", (unsigned long long)timer_ticks());
 
     smp_init(&acpi);
+    process_init();
 
-    kprintf("[sched] starting M4 tests...\n");
+    kprintf("[sched] starting M4/M5 tests...\n");
     struct thread *test = kthread_create(m4_selftest_thread, 0, "m4-test", SCHED_NORMAL, 0, 0);
     if (!test) panic("cannot create M4 test thread");
     sched_start();

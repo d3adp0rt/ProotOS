@@ -55,6 +55,7 @@ extern void isr29(void);
 extern void isr30(void);
 extern void isr31(void);
 extern void isr_default(void);
+extern void isr128(void);
 extern void irq0(void);
 extern void irq1(void);
 extern void irq2(void);
@@ -99,6 +100,7 @@ void idt_init(void) {
         set_gate(i, stubs[i], 0x8e);
     for (int i = 0; i < 16; i++)
         set_gate(32 + i, irq_stubs[i], 0x8e);
+    set_gate(0x80, isr128, 0xee); /* DPL3 syscall gate */
 
     idtp.limit = sizeof(idt) - 1;
     idtp.base = (uint64_t)(uintptr_t)idt;

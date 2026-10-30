@@ -6,6 +6,7 @@
 #include "mm.h"
 #include "apic.h"
 #include "timer.h"
+#include "gdt.h"
 
 extern void context_switch(uint64_t *old_rsp, uint64_t new_rsp);
 extern void thread_start(void);
@@ -29,15 +30,16 @@ static struct thread g_boot_thread;
 static uint32_t g_next_tid = 1;
 
 static const uint32_t nice_weight[40] = {
-    88761, 71755, 56483, 46273, 36291, 29154, 23254, 18705, 14949, 11916,
-    9548,  7620,  6100,  4904,  3906,  3121,  2501,  1991,  1586,  1277,
-    1024,  820,   655,   526,   423,   335,   272,   215,   172,   137,
-    110,   87,    70,    56,    45,    36,    29,    23,    18,    15,
+    88761, 71755, 56483, 46273, 36291, 29154, 23254, 18705, 14949, 11916, 9548, 7620, 6100, 4904,
+    3906,  3121,  2501,  1991,  1586,  1277,  1024,  820,   655,   526,   423,  335,  272,  215,
+    172,   137,   110,   87,    70,    56,    45,    36,    29,    23,    18,   15,
 };
 
 static uint32_t weight_for(int nice) {
-    if (nice < -20) nice = -20;
-    if (nice > 19) nice = 19;
+    if (nice < -20)
+        nice = -20;
+    if (nice > 19)
+        nice = 19;
     return nice_weight[nice + 20];
 }
 
@@ -49,24 +51,28 @@ static struct cpu *cpu_self(void) {
 static void enqueue_locked(struct cpu *cpu, struct thread *t) {
     t->next = 0;
     t->state = THREAD_READY;
-    if (t->vruntime < cpu->min_vruntime) t->vruntime = cpu->min_vruntime;
+    if (t->vruntime < cpu->min_vruntime)
+        t->vruntime = cpu->min_vruntime;
 
     if (t->cls == SCHED_EXCLUSIVE) {
         struct thread **pp = &cpu->run_excl;
-        while (*pp) pp = &(*pp)->next;
+        while (*pp)
+            pp = &(*pp)->next;
         *pp = t;
         return;
     }
     if (t->cls == SCHED_RT) {
         struct thread **pp = &cpu->run_rt;
-        while (*pp && (*pp)->rt_priority >= t->rt_priority) pp = &(*pp)->next;
+        while (*pp && (*pp)->rt_priority >= t->rt_priority)
+            pp = &(*pp)->next;
         t->next = *pp;
         *pp = t;
         return;
     }
 
     struct thread **pp = &cpu->run_normal;
-    while (*pp && (*pp)->vruntime <= t->vruntime) pp = &(*pp)->next;
+    while (*pp && (*pp)->vruntime <= t->vruntime)
+        pp = &(*pp)->next;
     t->next = *pp;
     *pp = t;
 }
@@ -84,12 +90,15 @@ static struct thread *pop_head(struct thread **head) {
 
 static struct thread *pick_next_locked(struct cpu *cpu) {
     struct thread *t = pop_head(&cpu->run_excl);
-    if (t) return t;
+    if (t)
+        return t;
     t = pop_head(&cpu->run_rt);
-    if (t) return t;
+    if (t)
+        return t;
     t = pop_head(&cpu->run_normal);
     if (t) {
-        if (t->vruntime > cpu->min_vruntime) cpu->min_vruntime = t->vruntime;
+        if (t->vruntime > cpu->min_vruntime)
+            cpu->min_vruntime = t->vruntime;
         return t;
     }
     cpu->idle->state = THREAD_RUNNING;
@@ -97,7 +106,8 @@ static struct thread *pick_next_locked(struct cpu *cpu) {
 }
 
 static void sched_enqueue_thread(struct thread *t) {
-    if (!t) return;
+    if (!t)
+        return;
     struct cpu *cpu = &g_cpus[t->cpu & (SCHED_MAX_CPUS - 1)];
     uint64_t flags = irq_save();
     spin_lock(&cpu->lock);
@@ -110,7 +120,8 @@ static void sched_enqueue_thread(struct thread *t) {
 static struct thread *thread_alloc(void (*fn)(void *), void *arg, const char *name, int cls,
                                    int nice, int rt_priority) {
     struct thread *t = kzalloc(sizeof(*t));
-    if (!t) return 0;
+    if (!t)
+        return 0;
     t->stack = kzalloc(THREAD_STACK_SIZE);
     if (!t->stack) {
         kfree(t);
@@ -119,6 +130,8 @@ static struct thread *thread_alloc(void (*fn)(void *), void *arg, const char *na
     t->stack_size = THREAD_STACK_SIZE;
     t->tid = __atomic_add_fetch(&g_next_tid, 1, __ATOMIC_RELAXED);
     t->cpu = cpu_self()->index;
+    t->pml4_phys = vmm_current_pml4();
+    t->proc = 0;
     t->state = THREAD_READY;
     t->cls = (uint8_t)cls;
     t->nice = (int8_t)nice;
@@ -147,7 +160,8 @@ static struct thread *thread_alloc(void (*fn)(void *), void *arg, const char *na
 struct thread *kthread_create(void (*fn)(void *), void *arg, const char *name, int cls, int nice,
                               int rt_priority) {
     struct thread *t = thread_alloc(fn, arg, name, cls, nice, rt_priority);
-    if (!t) return 0;
+    if (!t)
+        return 0;
     sched_enqueue_thread(t);
     return t;
 }
@@ -185,9 +199,15 @@ void schedule(void) {
     spin_unlock(&cpu->lock);
 
     if (next != prev) {
+        vmm_switch(next->pml4_phys);
+        tss_set_rsp0((uint64_t)(uintptr_t)(next->stack + next->stack_size));
         context_switch(&prev->rsp, next->rsp);
     }
     irq_restore(flags);
+}
+
+struct thread *sched_current(void) {
+    return cpu_self()->current;
 }
 
 void sched_tick(void) {
@@ -225,7 +245,8 @@ void sched_tick(void) {
     }
 
     if (!cur || cur == cpu->idle) {
-        if (cpu->run_excl || cpu->run_rt || cpu->run_normal) need = 1;
+        if (cpu->run_excl || cpu->run_rt || cpu->run_normal)
+            need = 1;
     } else {
         if (cpu->run_excl) {
             need = 1;
@@ -233,10 +254,12 @@ void sched_tick(void) {
             need = 1;
         } else if (cur->cls == SCHED_NORMAL && cpu->run_normal) {
             struct thread *next = cpu->run_normal;
-            if (next->vruntime + 4000 <= cur->vruntime) need = 1;
+            if (next->vruntime + 4000 <= cur->vruntime)
+                need = 1;
         } else if (cur->cls == SCHED_RT && cpu->run_rt) {
             struct thread *next = cpu->run_rt;
-            if (next->rt_priority > cur->rt_priority || cur->slice_used >= 10) need = 1;
+            if (next->rt_priority > cur->rt_priority || cur->slice_used >= 10)
+                need = 1;
         }
     }
 
@@ -249,13 +272,15 @@ int sched_need_resched(void) {
 }
 
 void sched_maybe_resched(int need_resched) {
-    if (need_resched) schedule();
+    if (need_resched)
+        schedule();
 }
 
 void sched_start(void) {
     struct cpu *cpu = cpu_self();
     cpu->idle = thread_alloc(idle_main, 0, "idle", SCHED_IDLE, 0, 0);
-    if (!cpu->idle) panic("sched: cannot allocate idle thread");
+    if (!cpu->idle)
+        panic("sched: cannot allocate idle thread");
 
     cpu->current = &g_boot_thread;
     g_boot_thread.cpu = cpu->index;
@@ -267,7 +292,8 @@ void sched_start(void) {
     cpu->current = next;
     cpu->need_resched = 0;
     spin_unlock(&cpu->lock);
-    if (next != &g_boot_thread) context_switch(&g_boot_thread.rsp, next->rsp);
+    if (next != &g_boot_thread)
+        context_switch(&g_boot_thread.rsp, next->rsp);
     irq_restore(flags);
 }
 
@@ -304,7 +330,8 @@ void kthread_sleep_ms(uint64_t ms) {
 }
 
 void wait_queue_wait(struct wait_queue *wq) {
-    if (!wq) return;
+    if (!wq)
+        return;
     uint64_t flags = irq_save();
     struct cpu *cpu = cpu_self();
     spin_lock(&wq->lock);
@@ -318,7 +345,8 @@ void wait_queue_wait(struct wait_queue *wq) {
 }
 
 void wait_queue_wake_all(struct wait_queue *wq) {
-    if (!wq) return;
+    if (!wq)
+        return;
     uint64_t flags = irq_save();
     spin_lock(&wq->lock);
     struct thread *t = wq->head;
@@ -334,7 +362,8 @@ void wait_queue_wake_all(struct wait_queue *wq) {
 }
 
 int kthread_join(struct thread *thread) {
-    if (!thread) return -1;
+    if (!thread)
+        return -1;
     for (;;) {
         uint64_t flags = irq_save();
         spin_lock(&thread->join_wq.lock);
@@ -359,7 +388,8 @@ void kthread_exit(void) {
     uint64_t flags = irq_save();
     struct cpu *cpu = cpu_self();
     struct thread *cur = cpu->current;
-    if (!cur) cpu_halt();
+    if (!cur)
+        cpu_halt();
 
     cur->state = THREAD_DEAD;
     cur->exit_code = 0;

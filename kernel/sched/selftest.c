@@ -4,6 +4,7 @@
  */
 #include "sched.h"
 #include "timer.h"
+#include "proc.h"
 
 static volatile int g_stop_workers;
 static volatile uint64_t g_counters[4];
@@ -22,7 +23,8 @@ struct worker_arg {
 };
 
 static void check(int condition, const char *message) {
-    if (!condition) panic("ktest: %s", message);
+    if (!condition)
+        panic("ktest: %s", message);
 }
 
 static void sleeper(void *arg) {
@@ -96,8 +98,8 @@ void m4_selftest_thread(void *arg) {
     kprintf("[ktest] wait queue: ok\n");
 
     /* EEVDF nice ratios. */
-    static struct worker_arg wargs[4] = { { 0 }, { 1 }, { 2 }, { 3 } };
-    static const int nices[4] = { -10, 0, 10, 19 };
+    static struct worker_arg wargs[4] = {{0}, {1}, {2}, {3}};
+    static const int nices[4] = {-10, 0, 10, 19};
     struct thread *workers[4];
     g_stop_workers = 0;
     for (int i = 0; i < 4; i++) {
@@ -107,7 +109,8 @@ void m4_selftest_thread(void *arg) {
     }
     kthread_sleep_ms(1000);
     g_stop_workers = 1;
-    for (int i = 0; i < 4; i++) check(kthread_join(workers[i]) == 0, "join cpu worker");
+    for (int i = 0; i < 4; i++)
+        check(kthread_join(workers[i]) == 0, "join cpu worker");
 
     uint64_t total = g_counters[0] + g_counters[1] + g_counters[2] + g_counters[3];
     check(total > 0, "workers made progress");
@@ -138,5 +141,6 @@ void m4_selftest_thread(void *arg) {
 
     kprintf("[ktest] M4 scheduler tests: PASS\n");
     kprintf("M4 complete: EEVDF, RT/exclusive classes, sleep, wait queues, join and preemption.\n");
+    process_spawn_init();
     kthread_exit();
 }

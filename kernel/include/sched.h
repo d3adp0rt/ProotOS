@@ -27,6 +27,7 @@ enum sched_class {
 
 struct wait_queue;
 struct thread;
+struct process;
 
 struct wait_queue {
     struct thread *head;
@@ -38,6 +39,8 @@ struct thread {
     size_t stack_size;
     uint32_t tid;
     uint32_t cpu;
+    uint64_t pml4_phys;
+    struct process *proc;
     uint8_t state;
     uint8_t cls;
     int8_t nice;
@@ -59,6 +62,7 @@ void sched_tick(void);
 int sched_need_resched(void);
 void sched_maybe_resched(int need_resched);
 void schedule(void);
+struct thread *sched_current(void);
 
 struct thread *kthread_create(void (*fn)(void *), void *arg, const char *name, int cls, int nice,
                               int rt_priority);

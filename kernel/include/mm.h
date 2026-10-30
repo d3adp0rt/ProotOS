@@ -57,6 +57,15 @@ void kfree(void *ptr);
 void kmalloc_dump(void);
 
 void vmm_init(void);
+uint64_t vmm_current_pml4(void);
+uint64_t vmm_kernel_pml4(void);
+void vmm_switch(uint64_t pml4_phys);
+uint64_t vmm_create_pml4(void);
+int vmm_map_pml4(uint64_t pml4_phys, uint64_t virt, uint64_t phys, uint64_t flags);
+int vmm_unmap_pml4(uint64_t pml4_phys, uint64_t virt);
+int vmm_is_mapped_pml4(uint64_t pml4_phys, uint64_t virt);
+uint64_t vmm_get_phys_pml4(uint64_t pml4_phys, uint64_t virt);
+int vmm_copy_user_space(uint64_t src_pml4, uint64_t dst_pml4);
 int vmm_map(uint64_t virt, uint64_t phys, uint64_t flags);
 int vmm_unmap(uint64_t virt);
 int vmm_is_mapped(uint64_t virt);

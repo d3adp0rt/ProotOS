@@ -1,5 +1,5 @@
 /*
- * ProotOS — x86_64 exception stubs.
+ * ProotOS — x86_64 exception and syscall stubs.
  */
 .section .text, "ax", @progbits
 
@@ -8,14 +8,14 @@
 isr\n:
     pushq $0
     pushq $\n
-    jmp isr_common
+    jmp isr_exception_common
 .endm
 
 .macro ISR_ERR n
 .global isr\n
 isr\n:
     pushq $\n
-    jmp isr_common
+    jmp isr_exception_common
 .endm
 
 ISR_NOERR 0
@@ -55,9 +55,9 @@ ISR_NOERR 31
 isr_default:
     pushq $0
     pushq $0xff
-    jmp isr_common
+    jmp isr_exception_common
 
-isr_common:
+isr_exception_common:
     pushq %rax
     pushq %rbx
     pushq %rcx
@@ -81,3 +81,52 @@ isr_common:
 1:
     hlt
     jmp 1b
+
+/*
+ * int 0x80 syscall entry (DPL3 gate).  The register frame layout is identical
+ * to struct trap_frame.
+ */
+.global isr128
+isr128:
+    pushq $0
+    pushq $128
+    jmp syscall_common
+
+syscall_common:
+    pushq %rax
+    pushq %rbx
+    pushq %rcx
+    pushq %rdx
+    pushq %rdi
+    pushq %rsi
+    pushq %rbp
+    pushq %r8
+    pushq %r9
+    pushq %r10
+    pushq %r11
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+
+    movq %rsp, %rdi
+    call syscall_dispatch
+
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %r11
+    popq %r10
+    popq %r9
+    popq %r8
+    popq %rbp
+    popq %rsi
+    popq %rdi
+    popq %rdx
+    popq %rcx
+    popq %rbx
+    popq %rax
+
+    addq $16, %rsp
+    iretq

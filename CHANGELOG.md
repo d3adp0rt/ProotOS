@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M5 user mode and processes**: GDT/TSS, ring-3 iretq entry, per-process
+  PML4 with shared kernel mappings, ELF64 user loader, user stack, `int 0x80`
+  syscall ABI (`write`, `getpid`, `yield`, `sleep_ms`, `fork`, `wait4`, `exit`),
+  deep-copy fork, zombie/wait4, initramfs `/init` execution, and a user-mode
+  hello/fork/wait demo.
 - **M4 scheduler**: per-CPU EEVDF runqueues with nice weights, RT FIFO/RR and
   `SCHED_EXCLUSIVE`, kernel threads, 16 KiB stacks, context switch, idle thread,
   timer preemption, sleep/wakeup, wait queues, `kthread_join`, and M4 self-tests

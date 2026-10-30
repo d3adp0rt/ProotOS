@@ -72,6 +72,9 @@ set(KERNEL_C_SOURCES
     kernel/smp.c
     kernel/sched/sched.c
     kernel/sched/selftest.c
+    kernel/initramfs.c
+    kernel/proc/process.c
+    kernel/proc/syscall.c
     kernel/lib/string.c
     kernel/lib/serial.c
     kernel/lib/kprintf.c
@@ -80,6 +83,7 @@ set(KERNEL_C_SOURCES
     kernel/arch/x86_64/apic.c
     kernel/arch/x86_64/timer.c
     kernel/arch/x86_64/rtc.c
+    kernel/arch/x86_64/gdt.c
     kernel/mm/pmm.c
     kernel/mm/vmm.c
     kernel/mm/kmalloc.c
@@ -172,11 +176,35 @@ add_custom_command(
 
 file(GLOB_RECURSE INITRAMFS_FILES CONFIGURE_DEPENDS
      ${CMAKE_SOURCE_DIR}/initramfs/*)
+
+set(USER_DIR ${CMAKE_BINARY_DIR}/user)
+file(MAKE_DIRECTORY ${USER_DIR})
+add_custom_command(
+    OUTPUT ${USER_DIR}/init.elf
+    COMMAND ${CLANG_EXECUTABLE}
+        -target x86_64-unknown-none-elf -ffreestanding -fno-pie
+        -c ${CMAKE_SOURCE_DIR}/user/init.S -o ${USER_DIR}/init.o
+    COMMAND ${LD_LLD_EXECUTABLE}
+        -Ttext=0x400000 -e _start -o ${USER_DIR}/init.elf ${USER_DIR}/init.o
+    DEPENDS ${CMAKE_SOURCE_DIR}/user/init.S
+    COMMENT "LD [user] init.elf"
+    VERBATIM)
+
+set(INITRAMFS_STAGE ${CMAKE_BINARY_DIR}/initramfs-root)
+add_custom_command(
+    OUTPUT ${INITRAMFS_STAGE}/init
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${INITRAMFS_STAGE}
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/initramfs ${INITRAMFS_STAGE}
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/init.elf ${INITRAMFS_STAGE}/init
+    DEPENDS ${USER_DIR}/init.elf ${INITRAMFS_FILES}
+    COMMENT "STAGE initramfs"
+    VERBATIM)
+
 add_custom_command(
     OUTPUT ${IMAGE_DIR}/initramfs.cpio
     COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/mkinitramfs.py
-        ${CMAKE_SOURCE_DIR}/initramfs ${IMAGE_DIR}/initramfs.cpio
-    DEPENDS ${INITRAMFS_FILES} ${CMAKE_SOURCE_DIR}/tools/mkinitramfs.py
+        ${INITRAMFS_STAGE} ${IMAGE_DIR}/initramfs.cpio
+    DEPENDS ${INITRAMFS_STAGE}/init ${INITRAMFS_FILES} ${CMAKE_SOURCE_DIR}/tools/mkinitramfs.py
     COMMENT "GEN initramfs.cpio"
     VERBATIM)
 
