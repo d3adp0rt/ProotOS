@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **M6a VFS/ramfs**: ramfs root unpacked from cpio initramfs, classic FHS
+  directories, `/proc/meminfo`, `/proc/uptime`, `/dev/console`, `/dev/null`,
+  path lookup, create/mkdir/unlink, read/write, fd-backed open/close/lseek,
+  and a user-mode FS demo reading `/etc/motd` and creating/reading `/tmp/test`.
 - **M5b process features**: `execve` from initramfs, pipes with blocking
   read/write and fd inheritance across fork, `close`, user-mode exception
   termination, `kill(SIGKILL)` self, and a `ptrace` skeleton

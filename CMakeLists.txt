@@ -76,6 +76,7 @@ set(KERNEL_C_SOURCES
     kernel/proc/process.c
     kernel/proc/syscall.c
     kernel/proc/pipe.c
+    kernel/fs/vfs.c
     kernel/lib/string.c
     kernel/lib/serial.c
     kernel/lib/kprintf.c

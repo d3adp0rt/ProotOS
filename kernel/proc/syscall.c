@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "sched.h"
 #include "timer.h"
+#include "vfs.h"
 
 #define SYS_READ 0
 #define SYS_WRITE 1
@@ -13,6 +14,13 @@
 #define SYS_CLOSE 3
 #define SYS_SLEEP_MS 4
 #define SYS_YIELD 5
+#define SYS_OPEN 6
+#define SYS_STAT 7
+#define SYS_MKDIR 8
+#define SYS_UNLINK 9
+#define SYS_LSEEK 10
+#define SYS_MOUNT 11
+#define SYS_UMOUNT 12
 #define SYS_PIPE 22
 #define SYS_FORK 57
 #define SYS_EXECVE 59
@@ -88,6 +96,58 @@ static long sys_execve(struct process *p, uint64_t upath) {
     process_enter_user(p);
 }
 
+static long sys_open(struct process *p, uint64_t upath, int flags) {
+    char path[128];
+    if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
+        return -14;
+    path[sizeof(path) - 1] = 0;
+    return process_open(path, flags);
+}
+
+static long sys_stat(struct process *p, uint64_t upath, uint64_t ustat) {
+    char path[128];
+    if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
+        return -14;
+    path[sizeof(path) - 1] = 0;
+    struct vfs_stat st;
+    if (vfs_stat(path, &st) != 0)
+        return -2;
+    if (user_copy_to(p, ustat, &st, sizeof(st)) != 0)
+        return -14;
+    return 0;
+}
+
+static long sys_mkdir(struct process *p, uint64_t upath, int mode) {
+    char path[128];
+    if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
+        return -14;
+    path[sizeof(path) - 1] = 0;
+    return process_mkdir(path, mode);
+}
+
+static long sys_unlink(struct process *p, uint64_t upath) {
+    char path[128];
+    if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
+        return -14;
+    path[sizeof(path) - 1] = 0;
+    return process_unlink(path);
+}
+
+static long sys_lseek(struct process *p, int fd, int64_t offset, int whence) {
+    if (fd < 0 || fd >= PROC_MAX_FDS || !p->fds[fd])
+        return -9;
+    struct file *f = p->fds[fd];
+    if (whence == 0)
+        f->offset = (uint64_t)offset;
+    else if (whence == 1)
+        f->offset += (uint64_t)offset;
+    else if (whence == 2)
+        f->offset = f->inode ? f->inode->size + (uint64_t)offset : 0;
+    else
+        return -22;
+    return (long)f->offset;
+}
+
 void syscall_dispatch(struct trap_frame *tf) {
     struct process *p = process_current();
     if (!p) {
@@ -117,6 +177,21 @@ void syscall_dispatch(struct trap_frame *tf) {
     case SYS_SLEEP_MS:
         kthread_sleep_ms(tf->rdi);
         ret = 0;
+        break;
+    case SYS_OPEN:
+        ret = sys_open(p, tf->rdi, (int)tf->rsi);
+        break;
+    case SYS_STAT:
+        ret = sys_stat(p, tf->rdi, tf->rsi);
+        break;
+    case SYS_MKDIR:
+        ret = sys_mkdir(p, tf->rdi, (int)tf->rsi);
+        break;
+    case SYS_UNLINK:
+        ret = sys_unlink(p, tf->rdi);
+        break;
+    case SYS_LSEEK:
+        ret = sys_lseek(p, (int)tf->rdi, (int64_t)tf->rsi, (int)tf->rdx);
         break;
     case SYS_PIPE:
         ret = sys_pipe(p, tf->rdi);

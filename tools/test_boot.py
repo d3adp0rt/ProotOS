@@ -37,7 +37,10 @@ def main() -> int:
         "Hello from ProotOS user mode!",
         "hello from execve!",
         "parent: wait4 returned after execve",
-        "M5 complete",
+        "ProotOS initramfs",
+        "vfs write/read works",
+        "fs test done",
+        "M6a complete",
     ]
     missing = [line for line in required if line not in out]
     if missing:

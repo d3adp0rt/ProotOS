@@ -23,6 +23,8 @@ void console_putc(char c);
 void console_write(const char *s);
 
 void kprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+int ksnprintf(char *out, size_t cap, const char *fmt, ...)
+    __attribute__((format(printf, 3, 4)));
 void panic(const char *fmt, ...) __attribute__((noreturn, format(printf, 1, 2)));
 
 void *memset(void *dst, int value, size_t n);
@@ -32,6 +34,7 @@ int memcmp(const void *a, const void *b, size_t n);
 size_t strlen(const char *s);
 int strcmp(const char *a, const char *b);
 int strncmp(const char *a, const char *b, size_t n);
+char *strcpy(char *dst, const char *src);
 
 void idt_init(void);
 void idt_load(void);

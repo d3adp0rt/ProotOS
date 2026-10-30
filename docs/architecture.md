@@ -57,7 +57,9 @@ the HHDM.
 | SMP AP bring-up | M3 (4/4 in QEMU) |
 | Scheduler / kernel threads | M4 (EEVDF, RT, exclusive) |
 | User mode / processes | M5 (ring 3, fork/execve/wait, pipes) |
-| VFS/ext2 | M6 |
+| VFS/ramfs/FHS | M6a |
+| ext2 | M6b |
+| Drivers | M7 |
 | Drivers | M7 |
 | libc/userspace | M8 |
 | Network/packages | M9 |

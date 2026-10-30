@@ -13,12 +13,24 @@
 #define PROC_MAX_FDS 16
 
 struct pipe;
+struct vfs_inode;
 struct file {
     int type;
     struct pipe *pipe;
     int write_end;
     int refs;
+    struct vfs_inode *inode;
+    uint64_t offset;
+    int flags;
 };
+
+#define FILE_TYPE_PIPE 2
+#define FILE_TYPE_VFS 3
+#define O_RDONLY 0
+#define O_WRONLY 1
+#define O_RDWR 2
+#define O_CREAT 0x40
+#define O_TRUNC 0x200
 
 enum process_state {
     PROC_RUNNING = 1,
@@ -53,6 +65,11 @@ int process_exec(struct process *p, const char *name);
 void process_enter_user(struct process *p) __attribute__((noreturn));
 void process_segfault(void) __attribute__((noreturn));
 int process_pipe(int out_fds[2]);
+int process_alloc_fd(struct process *p, struct file *f);
+int process_open(const char *path, int flags);
+int process_stat(const char *path, void *stat_buf, size_t len);
+int process_mkdir(const char *path, int mode);
+int process_unlink(const char *path);
 long process_read(int fd, void *buf, size_t len);
 long process_write(int fd, const void *buf, size_t len);
 void process_close_fd(int fd);

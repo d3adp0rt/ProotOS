@@ -12,6 +12,7 @@
 #include "gdt.h"
 #include "initramfs.h"
 #include "proc.h"
+#include "vfs.h"
 
 static const char *memory_type_name(uint32_t type) {
     switch (type) {
@@ -153,6 +154,7 @@ void kmain(struct proot_bootinfo *bi) {
     pmm_init(bi);
     vmm_init();
     kmalloc_init();
+    vfs_init();
     pmm_dump();
     mm_selftest();
 

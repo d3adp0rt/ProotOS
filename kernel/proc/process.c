@@ -390,8 +390,8 @@ void process_exit(int code) {
         wait_queue_wake_all(&p->parent->child_wq);
     kprintf("[proc] pid=%u exited with %d\n", p->pid, code);
     if (!p->parent) {
-        kprintf("\nM5 complete: user mode, int 0x80 syscalls, ELF64 loader, fork/execve/wait, "
-                "pipes.\n");
+        kprintf("\nM6a complete: VFS/ramfs, FHS, /proc, /dev, "
+                "open/read/write/mkdir/unlink.\n");
     }
     kthread_exit();
 }

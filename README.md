@@ -3,13 +3,13 @@
 A from-scratch 64-bit operating system for x86_64 UEFI, built as a demo and
 research prototype. Monolithic kernel, own bootloader, own userspace.
 
-**Status: M5 — user mode and processes.** The UEFI loader loads
-`kernel.elf` and a cpio initramfs from the ESP, builds page tables, exits boot
-services and jumps into the higher-half kernel. The kernel brings up
-serial/framebuffer consoles, IDT, buddy/slab/vmalloc, ACPI MADT, LAPIC/IOAPIC,
-PIC/PIT timer, RTC, boots all application processors, runs an EEVDF scheduler,
-and executes static ELF64 programs in ring 3 with `int 0x80` syscalls,
-per-process page tables, fork/execve/wait4, pipes and user-fault termination.
+**Status: M6a — VFS and ramfs.** The UEFI loader loads `kernel.elf` and a cpio
+initramfs from the ESP, builds page tables, exits boot services and jumps into
+the higher-half kernel. The kernel brings up serial/framebuffer consoles, IDT,
+buddy/slab/vmalloc, ACPI MADT, LAPIC/IOAPIC, PIC/PIT timer, RTC, SMP, an EEVDF
+scheduler, ring-3 processes with fork/execve/wait4/pipes, a VFS with ramfs root
+unpacked from initramfs, classic FHS, `/proc` and `/dev`, and open/read/write/
+mkdir/unlink syscalls.
 
 ![status](https://img.shields.io/badge/status-M1-blue)
 

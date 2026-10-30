@@ -63,3 +63,24 @@ int initramfs_find(const char *name, const void **data, size_t *size) {
     }
     return -1;
 }
+
+void initramfs_iterate(initramfs_callback callback, void *ctx) {
+    if (!g_base || !callback) return;
+    size_t offset = 0;
+    while (offset + 110 <= g_size) {
+        const uint8_t *hdr = g_base + offset;
+        if (memcmp(hdr, "070701", 6) != 0) return;
+        uint32_t filesize = hex8(hdr + 54);
+        uint32_t namesize = hex8(hdr + 94);
+        if (namesize == 0 || offset + 110 + namesize > g_size) return;
+        const char *entry = (const char *)(hdr + 110);
+        if (strcmp(entry, "TRAILER!!!") == 0) return;
+        size_t data_off = offset + 110 + namesize;
+        data_off = (data_off + 3) & ~(size_t)3;
+        if (data_off + filesize > g_size) return;
+        if (callback(entry, g_base + data_off, filesize, ctx) != 0) return;
+        size_t next = data_off + filesize;
+        next = (next + 3) & ~(size_t)3;
+        offset = next;
+    }
+}

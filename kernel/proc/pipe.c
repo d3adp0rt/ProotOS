@@ -4,6 +4,7 @@
  */
 #include "proc.h"
 #include "mm.h"
+#include "vfs.h"
 
 #define PIPE_TYPE 2
 #define PIPE_CAP 4096
@@ -24,7 +25,7 @@ struct pipe {
 
 void process_fd_copy(struct process *parent, struct process *child);
 
-static int fd_alloc(struct process *p, struct file *f) {
+int process_alloc_fd(struct process *p, struct file *f) {
     for (int i = 3; i < PROC_MAX_FDS; i++) {
         if (!p->fds[i]) {
             p->fds[i] = f;
@@ -62,8 +63,8 @@ int process_pipe(int out_fds[2]) {
     w->write_end = 1;
     w->refs = 1;
 
-    int rfd = fd_alloc(p, r);
-    int wfd = fd_alloc(p, w);
+    int rfd = process_alloc_fd(p, r);
+    int wfd = process_alloc_fd(p, w);
     if (rfd < 0 || wfd < 0)
         return -1;
     out_fds[0] = rfd;
@@ -97,6 +98,12 @@ long process_read(int fd, void *buf, size_t len) {
     if (!p || fd < 3 || fd >= PROC_MAX_FDS || !p->fds[fd])
         return -9;
     struct file *f = p->fds[fd];
+    if (f->type == FILE_TYPE_VFS) {
+        long n = vfs_read(f->inode, f->offset, buf, len);
+        if (n > 0)
+            f->offset += (uint64_t)n;
+        return n;
+    }
     if (f->type != PIPE_TYPE || f->write_end)
         return -9;
     struct pipe *pipe = f->pipe;
@@ -130,6 +137,12 @@ long process_write(int fd, const void *buf, size_t len) {
     if (!p || fd < 3 || fd >= PROC_MAX_FDS || !p->fds[fd])
         return -9;
     struct file *f = p->fds[fd];
+    if (f->type == FILE_TYPE_VFS) {
+        long n = vfs_write(f->inode, f->offset, buf, len);
+        if (n > 0)
+            f->offset += (uint64_t)n;
+        return n;
+    }
     if (f->type != PIPE_TYPE || !f->write_end)
         return -9;
     struct pipe *pipe = f->pipe;

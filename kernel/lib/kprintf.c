@@ -166,6 +166,14 @@ void kprintf(const char *fmt, ...) {
     va_end(ap);
 }
 
+int ksnprintf(char *out, size_t cap, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    format(out, cap, fmt, ap);
+    va_end(ap);
+    return (int)strlen(out);
+}
+
 void panic(const char *fmt, ...) {
     console_write("\n*** KERNEL PANIC ***\n");
     va_list ap;

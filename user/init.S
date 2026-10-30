@@ -31,6 +31,69 @@ _start:
     movq $parent_end - parent_msg, %rdx
     int $0x80
 
+    /* VFS: read /etc/motd */
+    movq $6, %rax
+    leaq motd_path(%rip), %rdi
+    xorq %rsi, %rsi
+    xorq %rdx, %rdx
+    int $0x80
+    movq %rax, %r12
+    movq $0, %rax
+    movq %r12, %rdi
+    leaq buf(%rip), %rsi
+    movq $255, %rdx
+    int $0x80
+    movq %rax, %r13
+    movq $1, %rax
+    movq $1, %rdi
+    leaq buf(%rip), %rsi
+    movq %r13, %rdx
+    int $0x80
+    movq $3, %rax
+    movq %r12, %rdi
+    int $0x80
+
+    /* VFS: create/write/read /tmp/test */
+    movq $6, %rax
+    leaq test_path(%rip), %rdi
+    movq $0x42, %rsi
+    movq $0644, %rdx
+    int $0x80
+    movq %rax, %r12
+    movq $1, %rax
+    movq %r12, %rdi
+    leaq vfs_msg(%rip), %rsi
+    movq $vfs_end - vfs_msg, %rdx
+    int $0x80
+    movq $10, %rax
+    movq %r12, %rdi
+    xorq %rsi, %rsi
+    xorq %rdx, %rdx
+    int $0x80
+    movq $0, %rax
+    movq %r12, %rdi
+    leaq buf(%rip), %rsi
+    movq $255, %rdx
+    int $0x80
+    movq %rax, %r13
+    movq $1, %rax
+    movq $1, %rdi
+    leaq buf(%rip), %rsi
+    movq %r13, %rdx
+    int $0x80
+    movq $3, %rax
+    movq %r12, %rdi
+    int $0x80
+    movq $9, %rax
+    leaq test_path(%rip), %rdi
+    int $0x80
+
+    movq $1, %rax
+    movq $1, %rdi
+    leaq fs_done(%rip), %rsi
+    movq $fs_done_end - fs_done, %rdx
+    int $0x80
+
     movq $60, %rax
     xorq %rdi, %rdi
     int $0x80
@@ -60,3 +123,18 @@ parent_msg:
 parent_end:
 path:
     .asciz "hello"
+motd_path:
+    .asciz "/etc/motd"
+test_path:
+    .asciz "/tmp/test"
+vfs_msg:
+    .ascii "vfs write/read works\n"
+vfs_end:
+fs_done:
+    .ascii "fs test done\n"
+fs_done_end:
+
+.section .bss, "aw", @nobits
+.align 16
+buf:
+    .skip 256
