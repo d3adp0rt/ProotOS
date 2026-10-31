@@ -9,8 +9,7 @@ _start:
     andq $-16, %rsp
     call main
     movl %eax, %edi
-    movq $60, %rax
-    int $0x80
+    call exit
 1:
     jmp 1b
 .size _start, . - _start

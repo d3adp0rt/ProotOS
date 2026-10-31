@@ -17,3 +17,5 @@ char *getcwd(char *buf, size_t size);
 int chdir(const char *path);
 int isatty(int fd);
 int execvp(const char *file, char *const argv[]);
+unsigned sleep(unsigned seconds);
+int usleep(unsigned usec);

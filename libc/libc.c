@@ -18,10 +18,11 @@ struct __proot_file {
     int fd;
     int eof;
     int err;
+    int unget;
 };
-static struct __proot_file g_stdin = {0, 0, 0};
-static struct __proot_file g_stdout = {1, 0, 0};
-static struct __proot_file g_stderr = {2, 0, 0};
+static struct __proot_file g_stdin = {0, 0, 0, -1};
+static struct __proot_file g_stdout = {1, 0, 0, -1};
+static struct __proot_file g_stderr = {2, 0, 0, -1};
 FILE *stdin = &g_stdin;
 FILE *stdout = &g_stdout;
 FILE *stderr = &g_stderr;
@@ -203,6 +204,14 @@ int printf(const char *fmt, ...) {
     return n;
 }
 
+int vfprintf(FILE *f, const char *fmt, va_list ap) {
+    char out[1024];
+    int n = vsnprintf(out, sizeof(out), fmt, ap);
+    if (f && n > 0)
+        write(f->fd, out, (size_t)(n < (int)sizeof(out) ? n : (int)sizeof(out) - 1));
+    return n;
+}
+
 int fprintf(FILE *f, const char *fmt, ...) {
     char out[1024];
     va_list ap;
@@ -239,6 +248,7 @@ FILE *fopen(const char *path, const char *mode) {
     f->fd = fd;
     f->eof = 0;
     f->err = 0;
+    f->unget = -1;
     return f;
 }
 
@@ -252,6 +262,7 @@ FILE *fdopen(int fd, const char *mode) {
     f->fd = fd;
     f->eof = 0;
     f->err = 0;
+    f->unget = -1;
     return f;
 }
 
@@ -267,6 +278,7 @@ FILE *freopen(const char *path, const char *mode, FILE *f) {
     f->fd = fd;
     f->eof = 0;
     f->err = 0;
+    f->unget = -1;
     return f;
 }
 
@@ -338,6 +350,68 @@ char *fgets(char *s, int n, FILE *f) {
 
 int fflush(FILE *f) { (void)f; return 0; }
 
+static int scan_common(FILE *f, const char *s, const char *fmt, va_list ap) {
+    (void)f;
+    int matched = 0;
+    while (*fmt && *s) {
+        if (*fmt == '%') {
+            fmt++;
+            if (*fmt == 'd') {
+                int *out = va_arg(ap, int *);
+                int neg = 0, v = 0, any = 0;
+                while (*s == ' ' || *s == '\t') s++;
+                if (*s == '-') { neg = 1; s++; }
+                while (*s >= '0' && *s <= '9') { v = v * 10 + (*s++ - '0'); any = 1; }
+                *out = neg ? -v : v;
+                matched++;
+            } else if (*fmt == 'f') {
+                char *end = 0;
+                double *out = va_arg(ap, double *);
+                *out = strtod(s, &end);
+                if (end == s) break;
+                s = end;
+                matched++;
+            } else if (*fmt == 's') {
+                char *out = va_arg(ap, char *);
+                while (*s == ' ' || *s == '\t') s++;
+                while (*s && *s != ' ' && *s != '\t') *out++ = *s++;
+                *out = 0;
+                matched++;
+            } else if (*fmt == 'c') {
+                char *out = va_arg(ap, char *);
+                *out = *s++;
+                matched++;
+            } else {
+                break;
+            }
+            fmt++;
+        } else {
+            if (*fmt != *s)
+                break;
+            fmt++;
+            s++;
+        }
+    }
+    return matched;
+}
+
+int vfscanf(FILE *f, const char *fmt, va_list ap) {
+    char buf[512];
+    long n = f ? read(f->fd, buf, sizeof(buf) - 1) : -1;
+    if (n <= 0)
+        return EOF;
+    buf[n] = 0;
+    return scan_common(f, buf, fmt, ap);
+}
+
+int fscanf(FILE *f, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int r = vfscanf(f, fmt, ap);
+    va_end(ap);
+    return r;
+}
+
 int sscanf(const char *s, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
@@ -385,6 +459,7 @@ time_t time(time_t *t) {
 }
 
 clock_t clock(void) { return 0; }
+double difftime(time_t a, time_t b) { return (double)(a - b); }
 
 static struct tm g_tm;
 struct tm *localtime(const time_t *t) {
@@ -395,6 +470,23 @@ struct tm *localtime(const time_t *t) {
     return &g_tm;
 }
 struct tm *gmtime(const time_t *t) { return localtime(t); }
+
+void *bsearch(const void *key, const void *base, size_t n, size_t size,
+              int (*cmp)(const void *, const void *)) {
+    const unsigned char *b = base;
+    size_t lo = 0, hi = n;
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        int r = cmp(key, b + mid * size);
+        if (r == 0)
+            return (void *)(b + mid * size);
+        if (r < 0)
+            hi = mid;
+        else
+            lo = mid + 1;
+    }
+    return 0;
+}
 
 void qsort(void *base, size_t n, size_t size, int (*cmp)(const void *, const void *)) {
     unsigned char *b = base;
@@ -414,9 +506,38 @@ void qsort(void *base, size_t n, size_t size, int (*cmp)(const void *, const voi
 
 int getc(FILE *f) {
     unsigned char c;
-    if (!f || read(f->fd, &c, 1) != 1)
+    if (!f)
+        return -1;
+    if (f->unget >= 0) {
+        c = (unsigned char)f->unget;
+        f->unget = -1;
+        return c;
+    }
+    if (read(f->fd, &c, 1) != 1)
         return -1;
     return c;
+}
+
+int fgetc(FILE *f) { return getc(f); }
+int ungetc(int c, FILE *f) {
+    if (!f || c == -1)
+        return -1;
+    f->unget = c & 0xff;
+    return c & 0xff;
+}
+int fileno(FILE *f) { return f ? f->fd : -1; }
+int setvbuf(FILE *f, char *buf, int mode, size_t size) {
+    (void)f; (void)buf; (void)mode; (void)size;
+    return 0;
+}
+void perror(const char *s) {
+    if (s && *s) {
+        write(2, s, strlen(s));
+        write(2, ": ", 2);
+    }
+    const char *e = strerror(errno);
+    write(2, e, strlen(e));
+    write(2, "\n", 1);
 }
 
 int puts(const char *s) {
@@ -489,6 +610,49 @@ long net_https_get(const char *host, const char *path, char *buf, size_t cap) {
 }
 
 int strcoll(const char *a, const char *b) { return strcmp(a, b); }
+
+int strcasecmp(const char *a, const char *b) {
+    while (*a && *b) {
+        int ca = tolower((unsigned char)*a++);
+        int cb = tolower((unsigned char)*b++);
+        if (ca != cb)
+            return ca - cb;
+    }
+    return tolower((unsigned char)*a) - tolower((unsigned char)*b);
+}
+
+int strncasecmp(const char *a, const char *b, size_t n) {
+    while (n && *a && *b) {
+        int ca = tolower((unsigned char)*a++);
+        int cb = tolower((unsigned char)*b++);
+        if (ca != cb)
+            return ca - cb;
+        n--;
+    }
+    if (!n)
+        return 0;
+    return tolower((unsigned char)*a) - tolower((unsigned char)*b);
+}
+
+char *strdup(const char *s) {
+    size_t n = strlen(s) + 1;
+    char *p = malloc(n);
+    if (p)
+        memcpy(p, s, n);
+    return p;
+}
+
+char *strndup(const char *s, size_t n) {
+    size_t len = 0;
+    while (len < n && s[len])
+        len++;
+    char *p = malloc(len + 1);
+    if (p) {
+        memcpy(p, s, len);
+        p[len] = 0;
+    }
+    return p;
+}
 
 char *strerror(int err) {
     switch (err) {
@@ -769,6 +933,16 @@ int isxdigit(int c) { return isdigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' &
 int tolower(int c) { return isupper(c) ? c - 'A' + 'a' : c; }
 int toupper(int c) { return islower(c) ? c - 'a' + 'A' : c; }
 
+static void (*g_atexit[32])(void);
+static int g_atexit_count;
+
+int atexit(void (*fn)(void)) {
+    if (!fn || g_atexit_count >= 32)
+        return -1;
+    g_atexit[g_atexit_count++] = fn;
+    return 0;
+}
+
 int abs(int v) { return v < 0 ? -v : v; }
 long labs(long v) { return v < 0 ? -v : v; }
 long atol(const char *s) { return strtol(s, 0, 10); }
@@ -854,7 +1028,18 @@ long strtol(const char *s, char **end, int base) {
     return (long)strtoul(s, end, base);
 }
 
-void exit(int code) { _exit(code); }
+void exit(int code) {
+    for (int i = g_atexit_count - 1; i >= 0; i--)
+        g_atexit[i]();
+    _exit(code);
+}
+
+double atof(const char *s) { return strtod(s, 0); }
+int system(const char *cmd) { (void)cmd; return -1; }
+int rename(const char *old, const char *neu) {
+    (void)old; (void)neu;
+    return -1;
+}
 void abort(void) { _exit(134); }
 char *getenv(const char *name) { (void)name; return 0; }
 
@@ -884,6 +1069,14 @@ char *getcwd(char *buf, size_t size) {
     return 0;
 }
 int chdir(const char *path) { (void)path; return 0; }
+unsigned sleep(unsigned seconds) {
+    sleep_ms(seconds * 1000);
+    return 0;
+}
+int usleep(unsigned usec) {
+    sleep_ms(usec / 1000 + (usec % 1000 != 0));
+    return 0;
+}
 int isatty(int fd) { return fd >= 0 && fd <= 2; }
 
 int gettimeofday(struct timeval *tv, void *tz) {

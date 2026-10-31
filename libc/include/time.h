@@ -10,3 +10,4 @@ time_t time(time_t *t);
 clock_t clock(void);
 struct tm *localtime(const time_t *t);
 struct tm *gmtime(const time_t *t);
+double difftime(time_t a, time_t b);
