@@ -19,6 +19,20 @@ typedef union {
     uint64_t u;
 } dbits;
 
+double nearbyint(double x) { return round(x); }
+double rint(double x) { return round(x); }
+long lround(double x) { return (long)round(x); }
+long lrint(double x) { return (long)round(x); }
+
+double copysign(double x, double y) {
+    return signbit(y) ? -fabs(x) : fabs(x);
+}
+
+double nan(const char *tag) {
+    (void)tag;
+    return make_nan();
+}
+
 double fabs(double x) {
     dbits b;
     b.d = x;

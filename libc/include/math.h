@@ -31,4 +31,14 @@ double frexp(double x, int *exp);
 double ldexp(double x, int exp);
 double modf(double x, double *ip);
 double fmin(double a, double b);
+double nan(const char *tag);
+double copysign(double x, double y);
+double nearbyint(double x);
+double rint(double x);
+long lround(double x);
+long lrint(double x);
+#define isnan(x) ((x) != (x))
+#define isinf(x) (!isnan(x) && fabs(x) > 1.7976931348623157e308)
+#define isfinite(x) (!isnan(x) && !isinf(x))
+#define signbit(x) ((x) < 0.0 || ((x) == 0.0 && 1.0 / (x) < 0.0))
 double fmax(double a, double b);

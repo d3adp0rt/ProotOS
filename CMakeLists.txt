@@ -385,6 +385,28 @@ add_custom_command(
     COMMENT "LD [user] /bin/tcc"
     VERBATIM)
 
+
+set(MP_DIR ${CMAKE_SOURCE_DIR}/third_party/micropython)
+set(MP_BUILD ${CMAKE_BINARY_DIR}/micropython)
+file(MAKE_DIRECTORY ${MP_BUILD})
+file(WRITE ${MP_BUILD}/cc.sh
+"#!/bin/sh\nexec ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding -fno-pie -fno-stack-protector -O2 -w -DPROOTOS -I${CMAKE_SOURCE_DIR}/libc/include \"$@\"\n")
+file(WRITE ${MP_BUILD}/ld.sh
+"#!/bin/sh\nexec ${LD_LLD_EXECUTABLE} -Ttext=0x400000 -e _start -z max-page-size=4096 \"$@\" ${LIBC_DIR}/crt0.o ${LIBC_DIR}/libc.o ${LIBC_DIR}/format.o ${LIBC_DIR}/math.o ${LIBC_DIR}/setjmp.o\n")
+file(CHMOD ${MP_BUILD}/cc.sh ${MP_BUILD}/ld.sh PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
+file(GLOB_RECURSE MP_SOURCES CONFIGURE_DEPENDS
+     ${MP_DIR}/py/*.c ${MP_DIR}/py/*.h ${MP_DIR}/shared/*.c ${MP_DIR}/shared/*.h
+     ${MP_DIR}/ports/minimal/*.c ${MP_DIR}/ports/minimal/*.h ${MP_DIR}/ports/minimal/Makefile)
+add_custom_command(
+    OUTPUT ${MP_BUILD}/build/firmware.elf
+    COMMAND ${CMAKE_COMMAND} -E env
+        make -C ${MP_DIR}/ports/minimal BUILD=${MP_BUILD}/build
+        CC=${MP_BUILD}/cc.sh LD=${MP_BUILD}/ld.sh
+        "LDFLAGS=-z max-page-size=4096"
+    DEPENDS ${MP_SOURCES} ${LIBC_OBJS}
+    COMMENT "BUILD micropython"
+    VERBATIM)
+
 set(INITRAMFS_STAGE ${CMAKE_BINARY_DIR}/initramfs-root)
 set(EXT2_IMG ${CMAKE_BINARY_DIR}/ext2.img)
 add_custom_command(
@@ -419,6 +441,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_hexdump ${INITRAMFS_STAGE}/bin/hexdump
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_lua ${INITRAMFS_STAGE}/bin/lua
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_tcc ${INITRAMFS_STAGE}/bin/tcc
+    COMMAND ${CMAKE_COMMAND} -E copy ${MP_BUILD}/build/firmware.elf ${INITRAMFS_STAGE}/bin/micropython
     COMMAND ${CMAKE_COMMAND} -E make_directory ${INITRAMFS_STAGE}/usr/lib/prootos
     COMMAND ${CMAKE_COMMAND} -E copy ${LIBC_OBJS} ${INITRAMFS_STAGE}/usr/lib/prootos
     COMMAND ${CMAKE_COMMAND} -E make_directory ${INITRAMFS_STAGE}/usr/include
@@ -438,6 +461,7 @@ add_custom_command(
             ${USER_DIR}/bin_cp ${USER_DIR}/bin_mv ${USER_DIR}/bin_ps ${USER_DIR}/bin_df
             ${USER_DIR}/bin_ping ${USER_DIR}/bin_wget ${USER_DIR}/bin_ppkg ${USER_DIR}/bin_greet
             ${USER_DIR}/bin_gui ${USER_DIR}/bin_lua ${USER_DIR}/bin_tcc ${USER_DIR}/bin_hexdump
+            ${MP_BUILD}/build/firmware.elf
             ${EXT2_IMG} ${INITRAMFS_FILES}
     COMMENT "STAGE initramfs"
     VERBATIM)

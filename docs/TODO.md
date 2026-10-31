@@ -134,12 +134,25 @@ through unresolved slots; it also needs libtcc1 helpers (`__va_start`,
 `__fixunsdfdi`, ...). JIT (`-run`) works and is the supported path. No C++
 runtime yet.
 
-Next:
+MicroPython done:
 
-- install headers + libc objects into the image and teach TCC to link
-  executables (or bring up a GCC cross package);
+- vendored MicroPython 1.24.1 `py/`, `shared/` and the minimal port;
+- built by CMake through a small clang/ld wrapper; linked with the ProotOS
+  libc, GC heap 256 KB, floats enabled, BASIC ROM level;
+- `/bin/micropython script.py` executes a file; no-argument mode starts the
+  friendly REPL (stdin, or `/dev/kbd` when launched from the console);
+- `open()` is a stub (no VFS module), external imports disabled;
+- demo `/usr/share/python/hello.py`: recursion, comprehensions, dicts,
+  `sorted`, `%` formatting;
+- libc additions for Python: alloca, float classification (`isnan/isinf/
+  isfinite/signbit/copysign/nearbyint/nan`), errno constants, fd flags.
+
+Still open:
+
+- TCC executable linking (PLT/GOT + libtcc1 helpers); JIT is the supported
+  path;
 - C++ compiler/runtime;
-- Python (MicroPython or a CPython port);
+- MicroPython VFS/import support and a larger heap;
 - `ppkg source` builds using the in-OS toolchain.
 
 ## ВЕРНУТЬСЯ: остальное
