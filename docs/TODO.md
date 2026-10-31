@@ -98,7 +98,7 @@ Delivered:
 Known post-M10 work:
 
 - per-window window backbuffers (currently one screen backbuffer);
-- richer text editing (word wrap, selection) and terminal search;
+- terminal search and persistent clipboard across apps;
 - signed package metadata, DHCP, NVMe/USB/audio drivers;
 - move GUI into `/init` as the default session instead of a demo command.
 

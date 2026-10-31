@@ -96,6 +96,7 @@ static int g_edit_nlines;
 static int g_edit_cx, g_edit_cy;
 static int g_edit_scroll;
 static int g_edit_dirty;
+static int g_edit_dl[72], g_edit_dc[72], g_edit_dn;
 
 #define UNDO_DEPTH 8
 struct undo_state {
@@ -521,6 +522,13 @@ static void draw_files(int x, int y, int w, int h) {
 static void raise_window(int idx);
 static void editor_ensure_visible(void);
 
+static int editor_cols(void) {
+    int cols = (g_wins[EDIT_WIN].w - 24) / 8;
+    if (cols < 20) cols = 20;
+    if (cols > EDIT_COLS) cols = EDIT_COLS;
+    return cols;
+}
+
 static int editor_rows(void) {
     int h = g_wins[EDIT_WIN].h - TITLE_H - 16;
     int rows = h / LINE_H;
@@ -635,10 +643,26 @@ static void editor_save(void) {
 
 static void editor_ensure_visible(void) {
     int rows = editor_rows();
+    int cols = editor_cols();
     if (g_edit_cy < g_edit_scroll)
         g_edit_scroll = g_edit_cy;
-    if (g_edit_cy >= g_edit_scroll + rows)
-        g_edit_scroll = g_edit_cy - rows + 1;
+    if (g_edit_cy >= g_edit_nlines)
+        g_edit_cy = g_edit_nlines - 1;
+    if (g_edit_cy < 0)
+        g_edit_cy = 0;
+    for (;;) {
+        int used = 0;
+        for (int line = g_edit_scroll; line < g_edit_cy; line++) {
+            int len = (int)strlen(g_edit_lines[line]);
+            int segs = (len + cols - 1) / cols;
+            if (segs < 1) segs = 1;
+            used += segs;
+        }
+        int seg = g_edit_cx / cols;
+        if (used + seg < rows)
+            break;
+        g_edit_scroll++;
+    }
     if (g_edit_scroll < 0)
         g_edit_scroll = 0;
 }
@@ -724,21 +748,41 @@ static void editor_key(char c) {
 static void draw_editor(int x, int y, int w, int h) {
     int rows = (h - 16) / LINE_H;
     if (rows < 1) return;
-    for (int r = 0; r < rows; r++) {
-        int line = g_edit_scroll + r;
-        if (line >= g_edit_nlines)
-            break;
-        text(x + 12, y + 8 + r * LINE_H, g_edit_lines[line], 0xe5e7eb, 1);
-    }
-    if (g_active == EDIT_WIN) {
-        int r = g_edit_cy - g_edit_scroll;
-        if (r >= 0 && r < rows) {
-            int l = (int)strlen(g_edit_lines[g_edit_cy]);
-            int cx = g_edit_cx;
-            if (cx > l) cx = l;
-            fill(x + 12 + cx * 8, y + 8 + r * LINE_H + 8, 8, 2, 0x60a5fa);
+    if (rows > 72) rows = 72;
+    int cols = editor_cols();
+    int dy = 0;
+    int cur_dr = -1, cur_dc = 0;
+    g_edit_dn = 0;
+    for (int line = g_edit_scroll; line < g_edit_nlines && dy < rows; line++) {
+        int len = (int)strlen(g_edit_lines[line]);
+        int segs = (len + cols - 1) / cols;
+        if (segs < 1) segs = 1;
+        for (int seg = 0; seg < segs && dy < rows; seg++) {
+            int startc = seg * cols;
+            int n = len - startc;
+            if (n < 0) n = 0;
+            if (n > cols) n = cols;
+            if (n > 0) {
+                char tmp[EDIT_COLS + 1];
+                for (int i = 0; i < n; i++)
+                    tmp[i] = g_edit_lines[line][startc + i];
+                tmp[n] = 0;
+                text(x + 12, y + 8 + dy * LINE_H, tmp, 0xe5e7eb, 1);
+            }
+            if (line == g_edit_cy && g_edit_cx >= startc &&
+                (g_edit_cx < startc + cols || seg == segs - 1)) {
+                cur_dr = dy;
+                cur_dc = g_edit_cx - startc;
+                if (cur_dc >= cols) cur_dc = cols - 1;
+            }
+            g_edit_dl[dy] = line;
+            g_edit_dc[dy] = startc;
+            dy++;
         }
     }
+    g_edit_dn = dy;
+    if (g_active == EDIT_WIN && cur_dr >= 0 && cur_dr < rows)
+        fill(x + 12 + cur_dc * 8, y + 8 + cur_dr * LINE_H + 8, 8, 2, 0x60a5fa);
     if (g_edit_dirty)
         text(x + w - 18, y + 6, "*", 0xfbbf24, 1);
     text(x + 12, y + h - 10, "Ctrl+S save  Ctrl+Z undo  arrows move", 0x64748b, 1);
@@ -1151,15 +1195,15 @@ static void handle_press(int x, int y) {
         int lx = x - (w->x + 12);
         int ly = y - (w->y + TITLE_H + 8);
         if (lx >= 0 && ly >= 0) {
-            int rows = (w->h - TITLE_H - 16) / LINE_H;
-            if (rows < 1) rows = 1;
-            int cy = g_edit_scroll + ly / LINE_H;
-            if (cy >= g_edit_nlines) cy = g_edit_nlines - 1;
-            int cx = lx / 8;
-            int len = (int)strlen(g_edit_lines[cy]);
-            if (cx > len) cx = len;
-            g_edit_cy = cy;
-            g_edit_cx = cx;
+            int r = ly / LINE_H;
+            if (r >= 0 && r < g_edit_dn) {
+                int cy = g_edit_dl[r];
+                int cx = g_edit_dc[r] + lx / 8;
+                int len = (int)strlen(g_edit_lines[cy]);
+                if (cx > len) cx = len;
+                g_edit_cy = cy;
+                g_edit_cx = cx;
+            }
         }
         return;
     }

@@ -19,7 +19,7 @@ corner resizing and close buttons; a screen backbuffer with damage-tracked
 clipped redraws; a taskbar launcher; multiple terminal windows with scrollback,
 wrapping, selection and copy/paste, each running `/bin/sh` over its own pipes;
 a file manager with keyboard navigation, directory browsing and text preview;
-and a text editor with undo and Ctrl+S save. Input is a PS/2 IntelliMouse
+and a text editor with word wrap, undo and Ctrl+S save. Input is a PS/2 IntelliMouse
 (buttons, wheel, Ctrl combos). Syscalls 33/72/85/86/88/89, `/dev/mouse`.
 
 ![M10 desktop](docs/screenshots/m10-final.png)
