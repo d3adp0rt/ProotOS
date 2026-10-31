@@ -46,6 +46,8 @@ def main() -> int:
         "[kbd] PS/2 scancode self-test: PASS",
         "[rtl8139] test TX: PASS",
         "[ahci] IDENTIFY: 16384 sectors",
+        "[net] DHCP offer",
+        "[net] DHCP lease",
         "[net] ICMP echo reply from 10.0.2.2",
         "[net] DNS example.com ->",
         "ping 10.0.2.2: reply",

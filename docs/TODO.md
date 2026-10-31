@@ -1,30 +1,24 @@
 # TODO / ВЕРНУТЬСЯ
 
-## ВЕРНУТЬСЯ: DHCP
+## DHCP — done
 
-Статус: отложено. Сеть сейчас работает на статической конфигурации:
+The kernel runs a BOOTP/DHCP client during bring-up:
 
-- IP: `10.0.2.15/24`
-- gateway: `10.0.2.2`
-- DNS: `10.0.2.3`
-- SLIRP gateway MAC fallback: `52:55:0a:00:02:02`
+- broadcast DISCOVER with `flags=0x8000`, client-id and hostname options;
+- parses OFFER (subnet, router, DNS options);
+- sends REQUEST with option 50 (requested IP) and 54 (server id), waits ACK;
+- applies the lease to `g_ip`, `g_gw`, `g_dns`; falls back to the static
+  `10.0.2.15/24` config when no server answers.
 
-Что уже проверено:
+QEMU SLIRP result:
 
-- `DHCPDISCOVER` уходит на `255.255.255.255:67`;
-- pcap подтверждает отправку;
-- `DHCPOFFER` от QEMU SLIRP не приходит;
-- padding до 300 байт, UDP checksum, client-id, source `0.0.0.0`/`10.0.2.15`
-  не помогли.
+```
+[net] DHCP offer 10.0.2.15 from 10.0.2.2
+[net] DHCP lease 10.0.2.15 gw 10.0.2.2 dns 10.0.2.3
+```
 
-Когда возвращаться: перед M9c или при переходе на реальную сеть.
-
-Что проверить при возврате:
-
-1. QEMU `-netdev user,dhcpstart=...` и BOOTP-режим.
-2. DHCP OFFER от SLIRP с эталонным клиентом (udhcpc/dhclient в Linux-госте).
-3. `ciaddr`/`flags`/`option 50/54/61`, длина BOOTP >= 300.
-4. После ACK — обновление `g_ip/g_gw/g_dns` и повторный ARP.
+Still open: lease renewal/T1/T2 timers, DHCPRELEASE on shutdown, and a
+user-space `ifconfig`/`udhcpc` interface.
 
 ## ВЕРНУТЬСЯ: TLS / HTTPS
 
@@ -99,7 +93,7 @@ Known post-M10 work:
 
 - per-window window backbuffers (currently one screen backbuffer);
 - terminal search and persistent clipboard across apps;
-- signed package metadata, DHCP, NVMe/USB/audio drivers;
+- signed package metadata, NVMe/USB/audio drivers;
 - move GUI into `/init` as the default session instead of a demo command.
 
 

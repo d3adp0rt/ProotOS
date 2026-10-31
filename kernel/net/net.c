@@ -11,9 +11,11 @@
 #define IP_ICMP 1
 
 static uint8_t g_mac[6];
-static const uint8_t g_ip[4] = { 10, 0, 2, 15 };
-static const uint8_t g_gw[4] = { 10, 0, 2, 2 };
+static uint8_t g_ip[4] = { 10, 0, 2, 15 };
+static uint8_t g_gw[4] = { 10, 0, 2, 2 };
+static uint8_t g_dns[4] = { 10, 0, 2, 3 };
 static uint8_t g_gw_mac[6];
+static uint32_t g_dhcp_xid;
 
 static uint16_t be16(uint16_t v) { return (uint16_t)((v << 8) | (v >> 8)); }
 static void put16(uint8_t *p, uint16_t v) { p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t)v; }
@@ -32,6 +34,161 @@ static uint16_t checksum(const void *data, size_t len) {
 void net_init(void) {
     const uint8_t *mac = rtl8139_mac();
     if (mac) memcpy(g_mac, mac, 6);
+}
+
+#define DHCP_MAGIC 0x63825363u
+#define BOOTP_LEN 300
+
+static uint16_t dhcp_rd16(const uint8_t *p) { return (uint16_t)((p[0] << 8) | p[1]); }
+
+static int dhcp_send(uint8_t type, const uint8_t *req_ip, const uint8_t *server_id) {
+    uint8_t frame[14 + 20 + 8 + BOOTP_LEN];
+    memset(frame, 0, sizeof(frame));
+    memset(frame, 0xff, 6);
+    memcpy(frame + 6, g_mac, 6);
+    put16(frame + 12, ETH_IP);
+
+    uint8_t *ip = frame + 14;
+    ip[0] = 0x45;
+    ip[8] = 64;
+    ip[9] = 17;
+    put16(ip + 2, (uint16_t)(20 + 8 + BOOTP_LEN));
+    put16(ip + 4, (uint16_t)(0x4444 + type));
+    /* 0.0.0.0 -> 255.255.255.255 */
+    memset(ip + 12, 0, 4);
+    memset(ip + 16, 0xff, 4);
+    put16(ip + 10, checksum(ip, 20));
+
+    uint8_t *udp = ip + 20;
+    put16(udp, 68);
+    put16(udp + 2, 67);
+    put16(udp + 4, (uint16_t)(8 + BOOTP_LEN));
+    put16(udp + 6, 0); /* checksum optional for IPv4 */
+
+    uint8_t *b = udp + 8;
+    b[0] = 1;  /* BOOTREQUEST */
+    b[1] = 1;  /* ethernet */
+    b[2] = 6;  /* hlen */
+    put32(b + 4, g_dhcp_xid);
+    put16(b + 10, 0x8000); /* broadcast reply */
+    memcpy(b + 28, g_mac, 6);
+    put32(b + 236, DHCP_MAGIC);
+
+    uint8_t *o = b + 240;
+    *o++ = 53; *o++ = 1; *o++ = type;
+    *o++ = 55; *o++ = 4; *o++ = 1; *o++ = 3; *o++ = 6; *o++ = 15;
+    *o++ = 61; *o++ = 7; *o++ = 1; memcpy(o, g_mac, 6); o += 6;
+    *o++ = 12; *o++ = 7; memcpy(o, "prootos", 7); o += 7;
+    if (type == 3 && req_ip) {
+        *o++ = 50; *o++ = 4; memcpy(o, req_ip, 4); o += 4;
+    }
+    if (type == 3 && server_id) {
+        *o++ = 54; *o++ = 4; memcpy(o, server_id, 4); o += 4;
+    }
+    *o++ = 255;
+    return rtl8139_send(frame, sizeof(frame));
+}
+
+static int dhcp_recv(uint8_t *msg_type, uint8_t *yiaddr, uint8_t *server_id,
+                     uint8_t *subnet, uint8_t *router, uint8_t *dns, int timeout_ms) {
+    uint8_t rx[1600];
+    for (int i = 0; i < timeout_ms; i++) {
+        size_t n = 0;
+        if (rtl8139_poll(rx, sizeof(rx), &n) > 0 && n >= 42 && rx[12] == 0x08 && rx[13] == 0x00) {
+            uint8_t *ip = rx + 14;
+            if (ip[9] != 17)
+                goto next;
+            {
+                uint8_t *udp = ip + 20;
+                if (dhcp_rd16(udp) != 67 || dhcp_rd16(udp + 2) != 68)
+                    goto next;
+                uint8_t *b = udp + 8;
+                if (rd32(b + 4) != g_dhcp_xid || rd32(b + 236) != DHCP_MAGIC)
+                    goto next;
+                memset(yiaddr, 0, 4);
+                memset(server_id, 0, 4);
+                memset(subnet, 0, 4);
+                memset(router, 0, 4);
+                memset(dns, 0, 4);
+                *msg_type = 0;
+                memcpy(yiaddr, b + 16, 4);
+                uint8_t *o = b + 240;
+                while (o < b + BOOTP_LEN) {
+                    uint8_t code = *o++;
+                    if (code == 0)
+                        continue;
+                    if (code == 255)
+                        break;
+                    if (o >= b + BOOTP_LEN)
+                        break;
+                    uint8_t len = *o++;
+                    if (o + len > b + BOOTP_LEN)
+                        break;
+                    if (code == 53 && len >= 1) *msg_type = o[0];
+                    else if (code == 54 && len == 4) memcpy(server_id, o, 4);
+                    else if (code == 1 && len == 4) memcpy(subnet, o, 4);
+                    else if (code == 3 && len >= 4) memcpy(router, o, 4);
+                    else if (code == 6 && len >= 4) memcpy(dns, o, 4);
+                    o += len;
+                }
+                return 0;
+            }
+        }
+next:
+        timer_sleep_ms(1);
+    }
+    return -1;
+}
+
+int net_dhcp(void) {
+    uint8_t msg_type, yiaddr[4], server_id[4], subnet[4], router[4], dns[4];
+    g_dhcp_xid = 0x39030000u ^ timer_ticks() ^ ((uint32_t)g_mac[3] << 16) ^
+                 ((uint32_t)g_mac[4] << 8) ^ g_mac[5];
+
+    int offered = 0;
+    for (int attempt = 0; attempt < 3 && !offered; attempt++) {
+        if (dhcp_send(1, 0, 0) != 0)
+            return -1;
+        if (dhcp_recv(&msg_type, yiaddr, server_id, subnet, router, dns, 3000) == 0 &&
+            msg_type == 2)
+            offered = 1;
+    }
+    if (!offered) {
+        kprintf("[net] DHCP: no OFFER, keeping static config\n");
+        return -1;
+    }
+    kprintf("[net] DHCP offer %u.%u.%u.%u from %u.%u.%u.%u\n",
+            yiaddr[0], yiaddr[1], yiaddr[2], yiaddr[3], server_id[0], server_id[1],
+            server_id[2], server_id[3]);
+
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (dhcp_send(3, yiaddr, server_id) != 0)
+            return -1;
+        if (dhcp_recv(&msg_type, yiaddr, server_id, subnet, router, dns, 3000) != 0)
+            continue;
+        if (msg_type == 5) {
+            memcpy(g_ip, yiaddr, 4);
+            if (router[0] || router[1] || router[2] || router[3])
+                memcpy(g_gw, router, 4);
+            else {
+                g_gw[0] = g_ip[0]; g_gw[1] = g_ip[1]; g_gw[2] = g_ip[2]; g_gw[3] = 2;
+            }
+            if (dns[0] || dns[1] || dns[2] || dns[3])
+                memcpy(g_dns, dns, 4);
+            else
+                memcpy(g_dns, g_gw, 4);
+            kprintf("[net] DHCP lease %u.%u.%u.%u gw %u.%u.%u.%u dns %u.%u.%u.%u\n",
+                    g_ip[0], g_ip[1], g_ip[2], g_ip[3], g_gw[0], g_gw[1], g_gw[2],
+                    g_gw[3], g_dns[0], g_dns[1], g_dns[2], g_dns[3]);
+            return 0;
+        }
+        if (msg_type == 6) {
+            kprintf("[net] DHCP NAK\n");
+            return -1;
+        }
+    }
+    kprintf("[net] DHCP: no ACK, keeping static config\n");
+    return -1;
 }
 
 static int arp_resolve(void) {
@@ -76,8 +233,7 @@ int net_dns_query(const char *name, uint8_t out_ip[4]) {
     ip[8] = 64;
     ip[9] = 17;
     memcpy(ip + 12, g_ip, 4);
-    const uint8_t dns_ip[4] = { 10, 0, 2, 3 };
-    memcpy(ip + 16, dns_ip, 4);
+    memcpy(ip + 16, g_dns, 4);
     uint8_t *udp = ip + 20;
     put16(udp, 12345);
     put16(udp + 2, 53);

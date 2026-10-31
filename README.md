@@ -6,7 +6,7 @@ research prototype. Monolithic kernel, own bootloader, own userspace.
 **Status: M10 complete — userspace desktop.** The kernel brings up consoles, IDT, memory,
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
-`cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
+`cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, DHCP, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
 Packages: `/bin/ppkg` downloads the registry over HTTPS and installs/removes
 tar-based `.pk` packages (`update`, `list`, `search`, `install`, `remove`),
 resolving dependencies recursively (demo installs `hello`, which pulls `greet`).
@@ -24,7 +24,7 @@ and a text editor with word wrap, undo and Ctrl+S save. Input is a PS/2 IntelliM
 
 ![M10 desktop](docs/screenshots/m10-final.png)
 
-Known limitations: DHCP is marked ВЕРНУТЬСЯ (static SLIRP config), TLS 1.3 and
+Networking uses DHCP (BOOTP client with static fallback); TLS 1.3 and
 Ed25519/RSA-PSS certificate chains are unsupported by mbedTLS 2.28, the CA
 bundle is a build-time snapshot, and source builds are a stub until an in-OS
 compiler exists.
