@@ -3,7 +3,7 @@
 A from-scratch 64-bit operating system for x86_64 UEFI, built as a demo and
 research prototype. Monolithic kernel, own bootloader, own userspace.
 
-**Status: M10a — userspace GUI.** The kernel brings up consoles, IDT, memory,
+**Status: M10b — userspace window manager.** The kernel brings up consoles, IDT, memory,
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
 `cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
@@ -13,11 +13,12 @@ resolving dependencies recursively (demo installs `hello`, which pulls `greet`).
 TLS: mbedTLS 2.28 client, TLS 1.2, multiple HTTPS sessions per boot,
 certificate and hostname verification against a Mozilla CA bundle.
 Disk: AHCI SATA (`/dev/sda`) with virtio-blk fallback.
-GUI: `/bin/gui` maps the GOP framebuffer into user space and draws a desktop
-with windows, text and a PS/2 mouse cursor (`/dev/fb`-style syscalls 85/86,
+GUI: `/bin/gui` maps the GOP framebuffer into user space and implements a
+small window manager: overlapping windows, z-order, focus, title-bar dragging,
+close buttons and a taskbar, with a PS/2 mouse cursor (syscalls 85/86,
 `/dev/mouse`).
 
-![M10a desktop](docs/screenshots/m10a-desktop.png)
+![M10b window manager](docs/screenshots/m10b-window-manager.png)
 
 Known limitations: DHCP is marked ВЕРНУТЬСЯ (static SLIRP config), TLS 1.3 and
 Ed25519/RSA-PSS certificate chains are unsupported by mbedTLS 2.28, the CA
@@ -30,7 +31,7 @@ Package repositories:
 - https://github.com/d3adp0rt/prootos-pkg-hello
 - https://github.com/d3adp0rt/prootos-pkg-greet
 
-![status](https://img.shields.io/badge/status-M10a-blue)
+![status](https://img.shields.io/badge/status-M10b-blue)
 
 ## Requirements
 

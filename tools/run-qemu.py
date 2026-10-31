@@ -40,6 +40,8 @@ def main() -> int:
     ap.add_argument("--monitor", default="", help="HMP monitor unix socket path")
     ap.add_argument("--expect", default="",
                     help="stop QEMU once this text appears on the serial console")
+    ap.add_argument("--stream", action="store_true",
+                    help="stream serial output live until the timeout")
     args = ap.parse_args()
 
     iso = Path(args.iso)
@@ -91,7 +93,7 @@ def main() -> int:
     print("+", " ".join(cmd), file=sys.stderr)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-    if args.expect:
+    if args.expect or args.stream:
         chunks: list[str] = []
         found = threading.Event()
 
@@ -100,12 +102,18 @@ def main() -> int:
                 chunks.append(line)
                 sys.stdout.write(line)
                 sys.stdout.flush()
-                if args.expect in "".join(chunks):
+                if args.expect and args.expect in "".join(chunks):
                     found.set()
 
         th = threading.Thread(target=_reader, daemon=True)
         th.start()
-        found.wait(timeout=args.timeout if args.timeout > 0 else None)
+        if args.expect:
+            found.wait(timeout=args.timeout if args.timeout > 0 else None)
+        else:
+            try:
+                proc.wait(timeout=args.timeout if args.timeout > 0 else None)
+            except subprocess.TimeoutExpired:
+                pass
         proc.kill()
         try:
             proc.wait(timeout=5)

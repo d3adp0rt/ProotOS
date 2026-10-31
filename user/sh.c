@@ -111,7 +111,7 @@ int main(int argc, char **argv) {
     run("/usr/bin/hello");
     run("ppkg remove hello");
     run("ppkg remove greet");
-    run("gui");
+    run("gui 10");
     run("clear");
     puts("M8b complete: libc, shell, ls/rm/cp/mv/ps/df.");
 

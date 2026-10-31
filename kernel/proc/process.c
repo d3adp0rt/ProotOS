@@ -391,19 +391,39 @@ int process_wait(int pid, uint64_t status_uptr) {
         return -1;
 
     for (;;) {
+        /* Check for a zombie and block under the same wait-queue lock.
+         * Otherwise a child exiting between the scan and wait_queue_wait()
+         * would wake nobody and the parent would sleep forever. */
+        uint64_t flags = irq_save();
+        spin_lock(&parent->child_wq.lock);
+        struct process *zombie = 0;
         for (struct process *child = parent->children; child; child = child->sibling) {
             if (pid != -1 && (int)child->pid != pid)
                 continue;
             if (child->state != PROC_ZOMBIE)
                 continue;
-            if (status_uptr) {
-                int status = (child->exit_code & 0xff) << 8;
-                if (user_copy_to(parent, status_uptr, &status, sizeof(status)) != 0)
-                    return -1;
-            }
-            return (int)child->pid;
+            zombie = child;
+            break;
         }
-        wait_queue_wait(&parent->child_wq);
+        if (!zombie) {
+            struct thread *cur = sched_current();
+            cur->state = THREAD_BLOCKED;
+            cur->next = parent->child_wq.head;
+            parent->child_wq.head = cur;
+            spin_unlock(&parent->child_wq.lock);
+            schedule();
+            irq_restore(flags);
+            continue;
+        }
+        spin_unlock(&parent->child_wq.lock);
+        irq_restore(flags);
+
+        if (status_uptr) {
+            int status = (zombie->exit_code & 0xff) << 8;
+            if (user_copy_to(parent, status_uptr, &status, sizeof(status)) != 0)
+                return -1;
+        }
+        return (int)zombie->pid;
     }
 }
 

@@ -87,13 +87,25 @@ M10a done:
   shadow/border drawing, cursor save/restore (no ghosting) and ESC exit;
 - verified with QEMU `mouse_move` and framebuffer screenshots.
 
-Next M10b:
+M10b done:
 
-- window manager: overlapping windows, z-order, drag/move, focus;
-- text console widget backed by a pipe, so the shell can run inside a window;
-- mouse clicks/buttons in the GUI (events already carry button bits);
-- launcher/taskbar actions and keyboard focus;
-- damage tracking instead of full-screen redraws.
+- overlapping windows with explicit z-order and raise-on-click;
+- title-bar dragging, close buttons and a taskbar that restores windows;
+- active-window highlighting and focus hand-off after closing;
+- click handling uses the mouse button bits from `/dev/mouse`;
+- verified with QEMU `mouse_move`/`mouse_button` and framebuffer screenshots.
+
+Fixed along the way: `wait4` had a lost-wakeup race (the child could exit
+between the zombie scan and `wait_queue_wait`), which randomly froze the boot
+demo at init; the scan and block now happen under the child wait-queue lock.
+
+Next M10c:
+
+- text console widget backed by a pipe, so the shell runs inside a window;
+- keyboard focus for the active window and text input routing;
+- launcher/taskbar actions to start apps;
+- damage tracking instead of full-screen redraws;
+- window resize and per-window backbuffers.
 
 ## ВЕРНУТЬСЯ: остальное
 
