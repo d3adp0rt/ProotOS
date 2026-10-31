@@ -154,12 +154,23 @@ M10f done:
 - verified with QEMU `mouse_move ... dz`, screenshots of `/etc/motd` preview
   and wheel-scrolled terminal history; boot test green.
 
-Next M10g:
+M10g done:
+
+- text editor window (reuses the Notes slot): loads a file from the Files
+  preview via an Edit button, edits with printable keys, Backspace, Enter,
+  arrows/PageUp/PageDown, and saves with Ctrl+S (`unlink` + create + write);
+- editor state: 64x96 line buffer, scrolling, cursor, dirty marker (`*`);
+- keyboard driver tracks Ctrl and left/right extended keys; Ctrl+letter is
+  translated to control codes (shell and editor both benefit);
+- verified by prepending `X` to `/etc/motd`, saving, and re-reading the file
+  through the Files preview; boot test stays green.
+
+Next M10h:
 
 - per-window backbuffers and resize-aware terminal reflow;
-- terminal text selection and copy;
-- widget-level keyboard focus (buttons, file list);
-- more launcher entries and a proper app window (text editor).
+- terminal text selection and copy/paste;
+- widget-level keyboard focus (buttons, file list, editor vs. terminal);
+- launcher entries for apps and an editor with word wrap/undo.
 
 ## ВЕРНУТЬСЯ: остальное
 

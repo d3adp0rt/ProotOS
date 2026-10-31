@@ -23,6 +23,7 @@ enum {
     W_SYSTEM,
     W_NOTES,
     W_FILES,
+    W_EDIT,
     W_TERM,
 };
 
@@ -72,6 +73,17 @@ static int g_files_count;
 static int g_files_sel = -1;
 static char g_files_preview[FILE_ROWS][FILE_COLS + 1];
 static int g_files_plines;
+static char g_files_selpath[384];
+
+#define EDIT_LINES 64
+#define EDIT_COLS 96
+static char g_edit_title[128] = "Editor";
+static char g_edit_path[384];
+static char g_edit_lines[EDIT_LINES][EDIT_COLS];
+static int g_edit_nlines;
+static int g_edit_cx, g_edit_cy;
+static int g_edit_scroll;
+static int g_edit_dirty;
 
 struct clip {
     int on, x, y, w, h;
@@ -354,15 +366,24 @@ static void files_select(int idx) {
         char tmp[256];
         strcpy(tmp, full);
         strcpy(g_files_path, tmp);
+        g_files_selpath[0] = 0;
         files_refresh();
     } else {
+        strcpy(g_files_selpath, full);
         files_preview(full);
     }
 }
 
-static void files_click(int x, int y, int wx, int wy) {
+static void editor_open(const char *path);
+
+static void files_click(int x, int y, int wx, int wy, int ww, int wh) {
     int lx = x - wx;
     int ly = y - wy;
+    if (lx >= ww - 104 && ly >= wh - 38) {
+        if (g_files_selpath[0])
+            editor_open(g_files_selpath);
+        return;
+    }
     if (lx < 8 || lx >= 212 || ly < 30)
         return;
     int row = (ly - 30) / 13;
@@ -392,12 +413,219 @@ static void draw_files(int x, int y, int w, int h) {
     text(x + 224, y + 8, "preview", 0x93c5fd, 1);
     for (int i = 0; i < g_files_plines && i < FILE_ROWS; i++)
         text(x + 224, y + 26 + i * 10, g_files_preview[i], 0xa7f3d0, 1);
-    (void)w;
+    uint32_t bcol = g_files_selpath[0] ? 0x2563eb : 0x1f2937;
+    fill(x + w - 100, y + h - 34, 92, 26, bcol);
+    frame(x + w - 100, y + h - 34, 92, 26, g_files_selpath[0] ? 0x60a5fa : 0x374151);
+    text(x + w - 78, y + h - 26, "Edit", 0xffffff, 1);
+}
+
+#define EDIT_WIN 2
+static void raise_window(int idx);
+
+static int editor_rows(void) {
+    int h = g_wins[EDIT_WIN].h - TITLE_H - 16;
+    int rows = h / LINE_H;
+    if (rows < 1) rows = 1;
+    if (rows > EDIT_LINES) rows = EDIT_LINES;
+    return rows;
+}
+
+static void editor_title(void) {
+    const char *base = g_edit_path;
+    for (int i = 0; g_edit_path[i]; i++)
+        if (g_edit_path[i] == '/')
+            base = g_edit_path + i + 1;
+    strcpy(g_edit_title, "Edit: ");
+    strcat(g_edit_title, base);
+    if (g_edit_dirty && strlen(g_edit_title) < sizeof(g_edit_title) - 3)
+        strcat(g_edit_title, " *");
+}
+
+static void editor_load(const char *path) {
+    strcpy(g_edit_path, path);
+    for (int i = 0; i < EDIT_LINES; i++)
+        g_edit_lines[i][0] = 0;
+    g_edit_nlines = 0;
+    g_edit_cx = g_edit_cy = 0;
+    g_edit_scroll = 0;
+    g_edit_dirty = 0;
+
+    int fd = open(path, 0, 0);
+    if (fd >= 0) {
+        static char buf[8192];
+        long n = read(fd, buf, sizeof(buf) - 1);
+        close(fd);
+        int line = 0, col = 0;
+        for (long i = 0; i < n && line < EDIT_LINES; i++) {
+            char c = buf[i];
+            if (c == '\r')
+                continue;
+            if (c == '\n') {
+                g_edit_lines[line][col] = 0;
+                line++;
+                col = 0;
+                continue;
+            }
+            if (c == '\t') {
+                for (int t = 0; t < 4 && col < EDIT_COLS - 1; t++)
+                    g_edit_lines[line][col++] = ' ';
+                continue;
+            }
+            if (col < EDIT_COLS - 1)
+                g_edit_lines[line][col++] = c;
+        }
+        if (line < EDIT_LINES && col > 0) {
+            g_edit_lines[line][col] = 0;
+            line++;
+        }
+        g_edit_nlines = line > 0 ? line : 1;
+    }
+    if (g_edit_nlines == 0) {
+        g_edit_nlines = 1;
+        g_edit_lines[0][0] = 0;
+    }
+    editor_title();
+}
+
+static void editor_save(void) {
+    static char out[8192];
+    size_t n = 0;
+    for (int i = 0; i < g_edit_nlines; i++) {
+        const char *ln = g_edit_lines[i];
+        while (*ln && n + 2 < sizeof(out))
+            out[n++] = *ln++;
+        if (n + 2 < sizeof(out))
+            out[n++] = '\n';
+    }
+    unlink(g_edit_path);
+    int fd = open(g_edit_path, 0x242, 0644);
+    if (fd < 0)
+        return;
+    write(fd, out, n);
+    close(fd);
+    g_edit_dirty = 0;
+    editor_title();
+}
+
+static void editor_ensure_visible(void) {
+    int rows = editor_rows();
+    if (g_edit_cy < g_edit_scroll)
+        g_edit_scroll = g_edit_cy;
+    if (g_edit_cy >= g_edit_scroll + rows)
+        g_edit_scroll = g_edit_cy - rows + 1;
+    if (g_edit_scroll < 0)
+        g_edit_scroll = 0;
+}
+
+static void editor_key(char c) {
+    char *cur = g_edit_lines[g_edit_cy];
+    int len = (int)strlen(cur);
+    if (c == 0x13) {
+        editor_save();
+        return;
+    }
+    if (c == 8 || c == 127) {
+        if (g_edit_cx > 0) {
+            for (int i = g_edit_cx - 1; i < len; i++)
+                cur[i] = cur[i + 1];
+            g_edit_cx--;
+            g_edit_dirty = 1;
+        } else if (g_edit_cy > 0) {
+            char *prev = g_edit_lines[g_edit_cy - 1];
+            int plen = (int)strlen(prev);
+            if (plen + len < EDIT_COLS) {
+                strcat(prev, cur);
+                for (int i = g_edit_cy; i < g_edit_nlines - 1; i++)
+                    strcpy(g_edit_lines[i], g_edit_lines[i + 1]);
+                g_edit_nlines--;
+                g_edit_cy--;
+                g_edit_cx = plen;
+                g_edit_dirty = 1;
+            }
+        }
+    } else if (c == '\n' || c == '\r') {
+        if (g_edit_nlines < EDIT_LINES) {
+            for (int i = g_edit_nlines; i > g_edit_cy + 1; i--)
+                strcpy(g_edit_lines[i], g_edit_lines[i - 1]);
+            strcpy(g_edit_lines[g_edit_cy + 1], cur + g_edit_cx);
+            cur[g_edit_cx] = 0;
+            g_edit_nlines++;
+            g_edit_cy++;
+            g_edit_cx = 0;
+            g_edit_dirty = 1;
+        }
+    } else if ((unsigned char)c == 0x80) {
+        if (g_edit_cy > 0) g_edit_cy--;
+        int l = (int)strlen(g_edit_lines[g_edit_cy]);
+        if (g_edit_cx > l) g_edit_cx = l;
+    } else if ((unsigned char)c == 0x81) {
+        if (g_edit_cy + 1 < g_edit_nlines) g_edit_cy++;
+        int l = (int)strlen(g_edit_lines[g_edit_cy]);
+        if (g_edit_cx > l) g_edit_cx = l;
+    } else if ((unsigned char)c == 0x84) {
+        if (g_edit_cx > 0) g_edit_cx--;
+    } else if ((unsigned char)c == 0x85) {
+        if (g_edit_cx < len) g_edit_cx++;
+    } else if ((unsigned char)c == 0x82) {
+        g_edit_scroll -= editor_rows();
+        if (g_edit_scroll < 0) g_edit_scroll = 0;
+    } else if ((unsigned char)c == 0x83) {
+        g_edit_scroll += editor_rows();
+        int maxs = g_edit_nlines - editor_rows();
+        if (maxs < 0) maxs = 0;
+        if (g_edit_scroll > maxs) g_edit_scroll = maxs;
+    } else if (c >= 32 && c < 127) {
+        if (len < EDIT_COLS - 1) {
+            for (int i = len; i >= g_edit_cx; i--)
+                cur[i + 1] = cur[i];
+            cur[g_edit_cx] = c;
+            g_edit_cx++;
+            g_edit_dirty = 1;
+        }
+    }
+    editor_ensure_visible();
+    editor_title();
+}
+
+static void draw_editor(int x, int y, int w, int h) {
+    int rows = (h - 16) / LINE_H;
+    if (rows < 1) return;
+    for (int r = 0; r < rows; r++) {
+        int line = g_edit_scroll + r;
+        if (line >= g_edit_nlines)
+            break;
+        text(x + 12, y + 8 + r * LINE_H, g_edit_lines[line], 0xe5e7eb, 1);
+    }
+    if (g_active == EDIT_WIN) {
+        int r = g_edit_cy - g_edit_scroll;
+        if (r >= 0 && r < rows) {
+            int l = (int)strlen(g_edit_lines[g_edit_cy]);
+            int cx = g_edit_cx;
+            if (cx > l) cx = l;
+            fill(x + 12 + cx * 8, y + 8 + r * LINE_H + 8, 8, 2, 0x60a5fa);
+        }
+    }
+    if (g_edit_dirty)
+        text(x + w - 18, y + 6, "*", 0xfbbf24, 1);
+    text(x + 12, y + h - 10, "Ctrl+S save   arrows move", 0x64748b, 1);
+}
+
+static void editor_open(const char *path) {
+    editor_load(path);
+    struct window *w = &g_wins[EDIT_WIN];
+    w->kind = W_EDIT;
+    w->x = 620;
+    w->y = 110;
+    w->w = 620;
+    w->h = 420;
+    w->title = g_edit_title;
+    w->visible = 1;
+    raise_window(EDIT_WIN);
 }
 
 static void draw_content(int idx, int x, int y, int w, int h) {
     if (idx == 0) {
-        text(x + 20, y + 20, "M10d: window manager", 0xcbd5e1, 1);
+        text(x + 20, y + 20, "M10g: window manager", 0xcbd5e1, 1);
         text(x + 20, y + 44, "drag bars, resize corners", 0xcbd5e1, 1);
         text(x + 20, y + 68, "taskbar: focus / new terminal", 0xcbd5e1, 1);
         fill(x + 20, y + 100, w - 60, 2, 0x334155);
@@ -410,7 +638,7 @@ static void draw_content(int idx, int x, int y, int w, int h) {
         return;
     }
     if (idx == 1) {
-        text(x + 18, y + 16, "kernel:  ProotOS M10d", 0xa7f3d0, 1);
+        text(x + 18, y + 16, "kernel:  ProotOS M10g", 0xa7f3d0, 1);
         text(x + 18, y + 38, "cpu:     4 x x86_64", 0xa7f3d0, 1);
         text(x + 18, y + 60, "sched:   EEVDF", 0xa7f3d0, 1);
         text(x + 18, y + 82, "input:   PS/2 aux mouse", 0xa7f3d0, 1);
@@ -459,6 +687,8 @@ static void draw_window(int idx) {
             draw_terminal(idx, w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
     } else if (w->kind == W_FILES) {
         draw_files(w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
+    } else if (w->kind == W_EDIT) {
+        draw_editor(w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
     } else {
         draw_content(idx, w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
     }
@@ -743,7 +973,23 @@ static void handle_press(int x, int y) {
         return;
     }
     if (w->kind == W_FILES) {
-        files_click(x, y, w->x, w->y + TITLE_H);
+        files_click(x, y, w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
+        return;
+    }
+    if (w->kind == W_EDIT && y > w->y + TITLE_H) {
+        int lx = x - (w->x + 12);
+        int ly = y - (w->y + TITLE_H + 8);
+        if (lx >= 0 && ly >= 0) {
+            int rows = (w->h - TITLE_H - 16) / LINE_H;
+            if (rows < 1) rows = 1;
+            int cy = g_edit_scroll + ly / LINE_H;
+            if (cy >= g_edit_nlines) cy = g_edit_nlines - 1;
+            int cx = lx / 8;
+            int len = (int)strlen(g_edit_lines[cy]);
+            if (cx > len) cx = len;
+            g_edit_cy = cy;
+            g_edit_cx = cx;
+        }
         return;
     }
     if (y < w->y + TITLE_H) {
@@ -876,6 +1122,12 @@ int main(int argc, char **argv) {
                 if ((unsigned char)c == 27) {
                     quit = 1;
                     break;
+                }
+                if (g_active >= 0 && g_wins[g_active].kind == W_EDIT) {
+                    editor_key(c);
+                    struct window *ew = &g_wins[g_active];
+                    damage_add(ew->x - 8, ew->y - 8, ew->w + 16, ew->h + 16);
+                    continue;
                 }
                 if (g_active >= 0 && g_wins[g_active].kind == W_TERM) {
                     struct term_state *t = &g_terms[g_active];

@@ -34,6 +34,7 @@ static volatile uint32_t g_tail;
 static int g_shift;
 static int g_caps;
 static int g_extended;
+static int g_ctrl;
 
 static inline uint8_t inb(uint16_t port) {
     uint8_t v;
@@ -64,7 +65,17 @@ void keyboard_feed(uint8_t scancode) {
             else if (base == 0x50) push((char)0x81); /* down */
             else if (base == 0x49) push((char)0x82); /* page up */
             else if (base == 0x51) push((char)0x83); /* page down */
+            else if (base == 0x4b) push((char)0x84); /* left */
+            else if (base == 0x4d) push((char)0x85); /* right */
         }
+        return;
+    }
+    if (scancode == 0x1d) {
+        g_ctrl = 1;
+        return;
+    }
+    if (scancode == 0x9d) {
+        g_ctrl = 0;
         return;
     }
     if (scancode == 0x2a || scancode == 0x36) {
@@ -84,6 +95,10 @@ void keyboard_feed(uint8_t scancode) {
     char c = g_shift ? map_upper[scancode] : map_lower[scancode];
     if (g_caps && c >= 'a' && c <= 'z')
         c = (char)(c - 'a' + 'A');
+    if (g_ctrl && c >= 'a' && c <= 'z')
+        c = (char)(c - 'a' + 1);
+    else if (g_ctrl && c >= 'A' && c <= 'Z')
+        c = (char)(c - 'A' + 1);
     if (c)
         push(c);
 }
@@ -108,6 +123,7 @@ void keyboard_init(void) {
         (void)inb(0x60);
     g_head = g_tail = 0;
     g_shift = g_caps = g_extended = 0;
+    g_ctrl = 0;
     keyboard_feed(0x1e); /* 'a' */
     keyboard_feed(0x2a); /* shift */
     keyboard_feed(0x1e); /* 'A' */
