@@ -128,10 +128,11 @@ TinyCC done (JIT):
 The image now installs `/usr/include` (libc + TCC wrapper headers), libc
 sources at `/usr/src/libc` and objects at `/usr/lib/prootos`.
 
-Limitations: executable linking is not finished. TCC emits PLT/GOT entries for
-calls into separately linked libc objects and the resulting static ELF jumps
-through unresolved slots; it also needs libtcc1 helpers (`__va_start`,
-`__fixunsdfdi`, ...). JIT (`-run`) works and is the supported path. No C++
+Limitations: executable linking is still WIP. TCC emits PLT/GOT entries for
+calls across modules; static-mode patching needs both absolute GOT
+relocations and relocate_plt(). A patched host build produces a correct static
+ELF, but in the in-OS build the same changes broke `-run` (relocation errors),
+so they are not enabled. `-run` (JIT) remains the supported path. No C++
 runtime yet.
 
 MicroPython done:

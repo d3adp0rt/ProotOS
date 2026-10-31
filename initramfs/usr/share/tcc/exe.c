@@ -8,7 +8,6 @@ int main(void) {
     printf("tcc: standalone executable works\n");
     for (int i = 1; i <= 5; i++)
         printf("tcc: square(%d) = %d\n", i, square(i));
-    printf("tcc: sqrt(2) = %.5f\n", 1.41421356);
     return 0;
 }
 

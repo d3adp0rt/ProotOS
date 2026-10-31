@@ -372,7 +372,10 @@ foreach(src ${TCC_SOURCES})
             -DTCC_TARGET_X86_64 -DONE_SOURCE=1 -DPROOTOS -DCONFIG_TCCBOOT
             -DCONFIG_TCC_STATIC -DCONFIG_TCC_ASM
             -c ${TCC_DIR}/${src}.c -o ${TCC_OBJ_DIR}/${src}.o
-        DEPENDS ${TCC_DIR}/${src}.c ${TCC_DIR}/tcc.h
+        DEPENDS ${TCC_DIR}/${src}.c ${TCC_DIR}/tcc.h ${TCC_DIR}/tccelf.c
+            ${TCC_DIR}/tccgen.c ${TCC_DIR}/tccpp.c ${TCC_DIR}/tccrun.c
+            ${TCC_DIR}/tccasm.c ${TCC_DIR}/x86_64-gen.c ${TCC_DIR}/x86_64-link.c
+            ${TCC_DIR}/i386-asm.c
         COMMENT "CC [tcc] ${src}.c"
         VERBATIM)
     list(APPEND TCC_OBJS ${TCC_OBJ_DIR}/${src}.o)
@@ -449,6 +452,10 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E make_directory ${INITRAMFS_STAGE}/usr/src/libc
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/libc/libc.c ${CMAKE_SOURCE_DIR}/libc/format.c
             ${CMAKE_SOURCE_DIR}/libc/math.c ${INITRAMFS_STAGE}/usr/src/libc
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${INITRAMFS_STAGE}/usr/src/tcc
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/initramfs/usr/src/tcc/libtcc1.c
+            ${CMAKE_SOURCE_DIR}/initramfs/usr/src/tcc/va_list.c
+            ${INITRAMFS_STAGE}/usr/src/tcc
     COMMAND ${CMAKE_COMMAND} -E copy ${TCC_DIR}/include/stdarg.h ${TCC_DIR}/include/stddef.h
             ${TCC_DIR}/include/stdbool.h ${TCC_DIR}/include/float.h
             ${INITRAMFS_STAGE}/usr/include
