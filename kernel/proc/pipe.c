@@ -7,6 +7,9 @@
 #include "vfs.h"
 
 #define PIPE_TYPE 2
+#define O_NONBLOCK 0x800
+#define F_GETFL 3
+#define F_SETFL 4
 #define PIPE_CAP 4096
 #define PIPE_READ 0
 #define PIPE_WRITE 1
@@ -93,9 +96,45 @@ void process_close_fd(int fd) {
     kfree(f);
 }
 
+int process_dup2(int oldfd, int newfd) {
+    struct process *p = process_current();
+    if (!p || oldfd < 0 || oldfd >= PROC_MAX_FDS || !p->fds[oldfd])
+        return -1;
+    if (newfd < 0 || newfd >= PROC_MAX_FDS)
+        return -1;
+    if (oldfd == newfd)
+        return newfd;
+    if (p->fds[newfd])
+        process_close_fd(newfd);
+    struct file *f = p->fds[oldfd];
+    p->fds[newfd] = f;
+    f->refs++;
+    if (f->type == PIPE_TYPE && f->pipe) {
+        if (f->write_end)
+            f->pipe->writers++;
+        else
+            f->pipe->readers++;
+    }
+    return newfd;
+}
+
+int process_fcntl(int fd, int cmd, int arg) {
+    struct process *p = process_current();
+    if (!p || fd < 0 || fd >= PROC_MAX_FDS || !p->fds[fd])
+        return -1;
+    struct file *f = p->fds[fd];
+    if (cmd == F_GETFL)
+        return f->flags;
+    if (cmd == F_SETFL) {
+        f->flags = arg;
+        return 0;
+    }
+    return -1;
+}
+
 long process_read(int fd, void *buf, size_t len) {
     struct process *p = process_current();
-    if (!p || fd < 3 || fd >= PROC_MAX_FDS || !p->fds[fd])
+    if (!p || fd < 0 || fd >= PROC_MAX_FDS || !p->fds[fd])
         return -9;
     struct file *f = p->fds[fd];
     if (f->type == FILE_TYPE_VFS) {
@@ -112,6 +151,10 @@ long process_read(int fd, void *buf, size_t len) {
     uint8_t *dst = buf;
     while (done < len) {
         spin_lock(&pipe->lock);
+        if (pipe->count == 0 && (f->flags & O_NONBLOCK)) {
+            spin_unlock(&pipe->lock);
+            return done ? (long)done : -11;
+        }
         while (pipe->count == 0 && pipe->writers > 0) {
             spin_unlock(&pipe->lock);
             wait_queue_wait(&pipe->read_wq);
@@ -134,7 +177,7 @@ long process_read(int fd, void *buf, size_t len) {
 
 long process_write(int fd, const void *buf, size_t len) {
     struct process *p = process_current();
-    if (!p || fd < 3 || fd >= PROC_MAX_FDS || !p->fds[fd])
+    if (!p || fd < 0 || fd >= PROC_MAX_FDS || !p->fds[fd])
         return -9;
     struct file *f = p->fds[fd];
     if (f->type == FILE_TYPE_VFS) {

@@ -85,11 +85,11 @@ static int run(char *line) {
 }
 
 int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
-    puts("ProotOS shell (M8)");
+    int stdin_mode = argc > 1 && strcmp(argv[1], "stdin") == 0;
+    puts(stdin_mode ? "ProotOS shell (M8) [gui terminal]" : "ProotOS shell (M8)");
     cat_file("/etc/motd");
 
+    if (!stdin_mode) {
     char *demo[] = {"echo", "M8 libc + shell + /bin/echo works", 0};
     int pid = fork();
     if (pid == 0) {
@@ -114,8 +114,9 @@ int main(int argc, char **argv) {
     run("gui 10");
     run("clear");
     puts("M8b complete: libc, shell, ls/rm/cp/mv/ps/df.");
+    }
 
-    int kbd = open("/dev/kbd", 0, 0);
+    int kbd = stdin_mode ? 0 : open("/dev/kbd", 0, 0);
     if (kbd < 0) {
         puts("sh: no /dev/kbd");
         return 1;
@@ -131,7 +132,12 @@ int main(int argc, char **argv) {
         for (;;) {
             char c;
             long n = read(kbd, &c, 1);
-            if (n <= 0) { sleep_ms(10); continue; }
+            if (n <= 0) {
+                if (stdin_mode)
+                    return 0;
+                sleep_ms(10);
+                continue;
+            }
             if (c == '\n' || c == '\r') {
                 putchar('\n');
                 line[len] = 0;

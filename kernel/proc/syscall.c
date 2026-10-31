@@ -34,6 +34,8 @@
 #define SYS_FB_INFO 85
 #define SYS_FB_MAP 86
 #define SYS_PIPE 22
+#define SYS_DUP2 33
+#define SYS_FCNTL 72
 #define SYS_FORK 57
 #define SYS_EXECVE 59
 #define SYS_EXIT 60
@@ -52,7 +54,7 @@ static long sys_write(struct process *p, int fd, uint64_t uptr, size_t len) {
             chunk = sizeof(buf);
         if (user_copy_from(p, buf, uptr + done, chunk) != 0)
             return -14;
-        if (fd == 1 || fd == 2) {
+        if ((fd == 1 || fd == 2) && !p->fds[fd]) {
             char text[129];
             memcpy(text, buf, chunk);
             text[chunk] = 0;
@@ -384,6 +386,12 @@ void syscall_dispatch(struct trap_frame *tf) {
     case SYS_CLEAR:
         console_clear();
         ret = 0;
+        break;
+    case SYS_DUP2:
+        ret = process_dup2((int)tf->rdi, (int)tf->rsi);
+        break;
+    case SYS_FCNTL:
+        ret = process_fcntl((int)tf->rdi, (int)tf->rsi, (int)tf->rdx);
         break;
     case SYS_PIPE:
         ret = sys_pipe(p, tf->rdi);

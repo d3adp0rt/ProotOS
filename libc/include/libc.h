@@ -20,6 +20,11 @@ void _exit(int code) __attribute__((noreturn));
 int getpid(void);
 int sleep_ms(unsigned ms);
 int pipe(int fds[2]);
+int dup2(int oldfd, int newfd);
+int fcntl(int fd, int cmd, int arg);
+#define F_GETFL 3
+#define F_SETFL 4
+#define O_NONBLOCK 0x800
 long lseek(int fd, long offset, int whence);
 int mkdir(const char *path, int mode);
 int unlink(const char *path);

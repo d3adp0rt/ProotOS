@@ -62,6 +62,12 @@ int sleep_ms(unsigned ms) {
 int pipe(int fds[2]) {
     return (int)syscall1(22, (long)fds);
 }
+int dup2(int oldfd, int newfd) {
+    return (int)syscall2(33, oldfd, newfd);
+}
+int fcntl(int fd, int cmd, int arg) {
+    return (int)syscall3(72, fd, cmd, arg);
+}
 long lseek(int fd, long offset, int whence) {
     return syscall3(10, fd, offset, whence);
 }

@@ -99,13 +99,26 @@ Fixed along the way: `wait4` had a lost-wakeup race (the child could exit
 between the zombie scan and `wait_queue_wait`), which randomly froze the boot
 demo at init; the scan and block now happen under the child wait-queue lock.
 
-Next M10c:
+M10c done:
 
-- text console widget backed by a pipe, so the shell runs inside a window;
-- keyboard focus for the active window and text input routing;
-- launcher/taskbar actions to start apps;
+- terminal window runs `/bin/sh stdin` as a child of the GUI over two pipes;
+- new syscalls: `dup2` (33) and `fcntl` (72, `F_SETFL`/`O_NONBLOCK`);
+- descriptors 0..2 can now refer to pipes; writes to fd 1/2 use the pipe when
+  one is attached, otherwise the kernel console;
+- non-blocking pipe reads let the GUI poll shell output without blocking;
+- keyboard input is routed to the terminal only while its window is focused;
+- the GUI starts the shell before mapping the framebuffer so `fork` does not
+  clone the 3.7 MB MMIO mapping;
+- verified by typing `ls` through QEMU `sendkey` and reading the screenshot;
+  boot test asserts `gui: terminal shell PASS`.
+
+Next M10d:
+
 - damage tracking instead of full-screen redraws;
-- window resize and per-window backbuffers.
+- window resize and per-window backbuffers;
+- launcher/taskbar actions to start apps;
+- terminal scrollback and better line spacing;
+- route keyboard focus explicitly to the active window's widget.
 
 ## ВЕРНУТЬСЯ: остальное
 

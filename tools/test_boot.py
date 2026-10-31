@@ -60,6 +60,7 @@ def main() -> int:
         "[mouse] PS/2 aux enabled",
         "gui: framebuffer",
         "gui: framebuffer check PASS",
+        "gui: terminal shell PASS",
         "gui: desktop drawn",
         "ProotOS shell (M8)",
         "M8 libc + shell + /bin/echo works",

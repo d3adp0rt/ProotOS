@@ -8,7 +8,9 @@
 #include "libc.h"
 #include "../third_party/fonts/font8x8_basic.h"
 
-#define MAX_WINS 3
+#define MAX_WINS 4
+#define TERM_COLS 78
+#define TERM_ROWS 30
 #define TITLE_H 34
 #define TASKBAR_H 38
 
@@ -23,12 +25,21 @@ static struct fb_info g_info;
 static int g_rgb;
 
 static struct window g_wins[MAX_WINS] = {
-    {150, 120, 620, 360, "ProotOS Desktop", 1},
-    {420, 300, 430, 250, "System", 1},
-    {760, 140, 340, 240, "Notes", 1},
+    {140, 110, 560, 320, "ProotOS Desktop", 1},
+    {420, 300, 400, 220, "System", 1},
+    {900, 120, 300, 200, "Notes", 1},
+    {300, 160, 680, 360, "Terminal", 1},
 };
-static int g_order[MAX_WINS] = {0, 1, 2}; /* bottom .. top */
-static int g_active = 2;
+static int g_order[MAX_WINS] = {0, 1, 2, 3}; /* bottom .. top */
+static int g_active = 3;
+
+/* Terminal window (index 3) runs /bin/sh over two pipes. */
+static char g_term[TERM_ROWS][TERM_COLS];
+static int g_term_row, g_term_col;
+static int g_term_in = -1;   /* write end -> shell stdin */
+static int g_term_out = -1;  /* read end  <- shell stdout/stderr */
+static int g_term_esc;
+static int g_term_bytes;
 
 static uint32_t rgba(uint32_t rgb) {
     if (g_rgb)
@@ -83,6 +94,67 @@ static void desktop(void) {
     }
 }
 
+static void term_scroll(void) {
+    for (int r = 1; r < TERM_ROWS; r++)
+        for (int c = 0; c < TERM_COLS; c++)
+            g_term[r - 1][c] = g_term[r][c];
+    for (int c = 0; c < TERM_COLS; c++)
+        g_term[TERM_ROWS - 1][c] = ' ';
+    g_term_row = TERM_ROWS - 1;
+}
+
+static void term_newline(void) {
+    g_term_col = 0;
+    g_term_row++;
+    if (g_term_row >= TERM_ROWS)
+        term_scroll();
+}
+
+static void term_putc(char ch) {
+    if (g_term_esc) {
+        if (g_term_esc == 1 && ch == '[') { g_term_esc = 2; return; }
+        g_term_esc = 0;
+        return;
+    }
+    if (ch == 27) { g_term_esc = 1; return; }
+    if (ch == '\n') { term_newline(); return; }
+    if (ch == '\r') { g_term_col = 0; return; }
+    if (ch == '\b') { if (g_term_col > 0) g_term_col--; return; }
+    if ((unsigned char)ch < 32) return;
+    if (g_term_col >= TERM_COLS)
+        term_newline();
+    g_term[g_term_row][g_term_col++] = ch;
+}
+
+static void term_feed(const char *buf, int n) {
+    g_term_bytes += n;
+    for (int i = 0; i < n; i++)
+        term_putc(buf[i]);
+}
+
+static void term_init_grid(void) {
+    for (int r = 0; r < TERM_ROWS; r++)
+        for (int c = 0; c < TERM_COLS; c++)
+            g_term[r][c] = ' ';
+    g_term_row = 0;
+    g_term_col = 0;
+    g_term_esc = 0;
+}
+
+static void draw_terminal(int x, int y, int w, int h) {
+    (void)w;
+    int cx = x + 12, cy = y + 8;
+    for (int r = 0; r < TERM_ROWS && (r * 8) < h - 16; r++) {
+        char line[TERM_COLS + 1];
+        for (int c = 0; c < TERM_COLS; c++)
+            line[c] = g_term[r][c];
+        line[TERM_COLS] = 0;
+        text(cx, cy + r * 8, line, 0x9becb8, 1);
+    }
+    if (g_active == 3 && g_term_row < TERM_ROWS)
+        fill(cx + g_term_col * 8, cy + g_term_row * 8, 8, 8, 0x9becb8);
+}
+
 static void draw_content(int idx, int x, int y, int w, int h) {
     (void)w;
     if (idx == 0) {
@@ -113,6 +185,8 @@ static void draw_content(int idx, int x, int y, int w, int h) {
     (void)h;
 }
 
+
+
 static void draw_window(int idx) {
     struct window *w = &g_wins[idx];
     if (!w->visible)
@@ -125,7 +199,10 @@ static void draw_window(int idx) {
     text(w->x + 14, w->y + 11, w->title, 0xffffff, 1);
     fill(w->x + w->w - 26, w->y + 8, 18, 18, 0xef4444);
     text(w->x + w->w - 22, w->y + 10, "x", 0xffffff, 1);
-    draw_content(idx, w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
+    if (idx == 3)
+        draw_terminal(w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
+    else
+        draw_content(idx, w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
 }
 
 static void taskbar(void) {
@@ -277,13 +354,43 @@ int main(int argc, char **argv) {
         printf("gui: no framebuffer\n");
         return 1;
     }
+    g_rgb = g_info.format == 0;
+    int seconds = argc > 1 ? arg_int(argv[1]) : 0;
+
+    /* Start the terminal shell before mapping the framebuffer: fork copies
+     * the address space, and the fb mapping must not be cloned. */
+    term_init_grid();
+    int in_p[2], out_p[2];
+    if (pipe(in_p) == 0 && pipe(out_p) == 0) {
+        int pid = fork();
+        if (pid == 0) {
+            dup2(in_p[0], 0);
+            dup2(out_p[1], 1);
+            dup2(out_p[1], 2);
+            close(in_p[0]);
+            close(in_p[1]);
+            close(out_p[0]);
+            close(out_p[1]);
+            char *sargv[] = {"sh", "stdin", 0};
+            execve("/bin/sh", sargv, 0);
+            _exit(1);
+        }
+        if (pid > 0) {
+            close(in_p[0]);
+            close(out_p[1]);
+            g_term_in = in_p[1];
+            g_term_out = out_p[0];
+            fcntl(g_term_out, F_SETFL, O_NONBLOCK);
+        }
+    } else {
+        printf("gui: terminal pipes failed\n");
+    }
+
     g_fb = fb_map();
     if (!g_fb) {
         printf("gui: fb_map failed\n");
         return 1;
     }
-    g_rgb = g_info.format == 0;
-    int seconds = argc > 1 ? arg_int(argv[1]) : 0;
     printf("gui: framebuffer %ux%u %ubpp pitch=%u\n", g_info.width, g_info.height,
            g_info.bpp, g_info.pitch);
 
@@ -341,8 +448,31 @@ int main(int argc, char **argv) {
                 }
             }
         }
+        if (g_term_out >= 0) {
+            char tb[256];
+            long tn;
+            int got = 0;
+            while ((tn = read(g_term_out, tb, sizeof(tb))) > 0) {
+                term_feed(tb, (int)tn);
+                got = 1;
+            }
+            if (got)
+                redraw = 1;
+        }
+
         char c;
-        if (kfd >= 0 && read(kfd, &c, 1) == 1 && c == 27)
+        int quit = 0;
+        if (kfd >= 0) {
+            while (read(kfd, &c, 1) == 1) {
+                if ((unsigned char)c == 27) {
+                    quit = 1;
+                    break;
+                }
+                if (g_active == 3 && g_term_in >= 0)
+                    write(g_term_in, &c, 1);
+            }
+        }
+        if (quit)
             break;
 
         if (redraw) {
@@ -360,11 +490,17 @@ int main(int argc, char **argv) {
     }
 
     restore_under(cx, cy, under);
+    if (g_term_in >= 0)
+        close(g_term_in);
+    if (g_term_out >= 0)
+        close(g_term_out);
     if (mfd >= 0)
         close(mfd);
     if (kfd >= 0)
         close(kfd);
     printf("gui: framebuffer check %s\n", fb_ok ? "PASS" : "FAIL");
+    printf("gui: terminal shell %s (%d bytes)\n", g_term_bytes > 0 ? "PASS" : "FAIL",
+           g_term_bytes);
     printf("gui: desktop drawn, %d frames, %d mouse events\n", frames, events);
     return 0;
 }

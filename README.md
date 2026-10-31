@@ -3,7 +3,7 @@
 A from-scratch 64-bit operating system for x86_64 UEFI, built as a demo and
 research prototype. Monolithic kernel, own bootloader, own userspace.
 
-**Status: M10b — userspace window manager.** The kernel brings up consoles, IDT, memory,
+**Status: M10c — GUI terminal.** The kernel brings up consoles, IDT, memory,
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
 `cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
@@ -15,10 +15,10 @@ certificate and hostname verification against a Mozilla CA bundle.
 Disk: AHCI SATA (`/dev/sda`) with virtio-blk fallback.
 GUI: `/bin/gui` maps the GOP framebuffer into user space and implements a
 small window manager: overlapping windows, z-order, focus, title-bar dragging,
-close buttons and a taskbar, with a PS/2 mouse cursor (syscalls 85/86,
-`/dev/mouse`).
+close buttons, a taskbar and a terminal window running `/bin/sh` over pipes,
+with a PS/2 mouse cursor (syscalls 85/86, `/dev/mouse`).
 
-![M10b window manager](docs/screenshots/m10b-window-manager.png)
+![M10c terminal](docs/screenshots/m10c-terminal.png)
 
 Known limitations: DHCP is marked ВЕРНУТЬСЯ (static SLIRP config), TLS 1.3 and
 Ed25519/RSA-PSS certificate chains are unsupported by mbedTLS 2.28, the CA
@@ -31,7 +31,7 @@ Package repositories:
 - https://github.com/d3adp0rt/prootos-pkg-hello
 - https://github.com/d3adp0rt/prootos-pkg-greet
 
-![status](https://img.shields.io/badge/status-M10b-blue)
+![status](https://img.shields.io/badge/status-M10c-blue)
 
 ## Requirements
 
