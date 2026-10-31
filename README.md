@@ -3,7 +3,7 @@
 A from-scratch 64-bit operating system for x86_64 UEFI, built as a demo and
 research prototype. Monolithic kernel, own bootloader, own userspace.
 
-**Status: M10 complete — userspace desktop.** The kernel brings up consoles, IDT, memory,
+**Status: M11 — Lua 5.4 runs in ProotOS.** The kernel brings up consoles, IDT, memory,
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
 `cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, DHCP, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
@@ -22,6 +22,12 @@ a file manager with keyboard navigation, directory browsing and text preview;
 and a text editor with word wrap, undo and Ctrl+S save. Input is a PS/2 IntelliMouse
 (buttons, wheel, Ctrl combos). Syscalls 33/72/85/86/88/89, `/dev/mouse`.
 
+Languages: Lua 5.4 is ported and runs from `/bin/lua` (base/table/string/math/
+utf8/coroutine/debug libraries; io/os/package disabled). The libc now has a
+free-list allocator, realloc/calloc, stdio-style files, floating-point
+printf/strtod, setjmp/longjmp and a small libm; user threads get FXSAVE/FXRSTOR
+context switching.
+
 ![M10 desktop](docs/screenshots/m10-final.png)
 
 Networking uses DHCP (BOOTP client with static fallback); TLS 1.3 and
@@ -35,7 +41,7 @@ Package repositories:
 - https://github.com/d3adp0rt/prootos-pkg-hello
 - https://github.com/d3adp0rt/prootos-pkg-greet
 
-![status](https://img.shields.io/badge/status-M10-blue)
+![status](https://img.shields.io/badge/status-M11-blue)
 
 ## Requirements
 

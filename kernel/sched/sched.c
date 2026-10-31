@@ -154,6 +154,8 @@ static struct thread *thread_alloc(void (*fn)(void *), void *arg, const char *na
     *--sp = 0; /* r14 */
     *--sp = 0; /* r15 */
     t->rsp = (uint64_t)(uintptr_t)sp;
+    /* New threads start with a sane x87/SSE state (not MXCSR=0). */
+    __asm__ volatile("fxsave (%0)" ::"r"(t->fpu) : "memory");
     return t;
 }
 
@@ -202,6 +204,8 @@ void schedule(void) {
     if (next != prev) {
         vmm_switch(next->pml4_phys);
         tss_set_rsp0((uint64_t)(uintptr_t)(next->stack + next->stack_size));
+        __asm__ volatile("fxsave (%0)" ::"r"(prev->fpu) : "memory");
+        __asm__ volatile("fxrstor (%0)" ::"r"(next->fpu) : "memory");
         context_switch(&prev->rsp, next->rsp);
     }
     irq_restore(flags);
@@ -295,8 +299,11 @@ void sched_start(void) {
     cpu->current = next;
     cpu->need_resched = 0;
     spin_unlock(&cpu->lock);
-    if (next != &g_boot_thread)
+    if (next != &g_boot_thread) {
+        __asm__ volatile("fxsave (%0)" ::"r"(&g_boot_thread.fpu) : "memory");
+        __asm__ volatile("fxrstor (%0)" ::"r"(next->fpu) : "memory");
         context_switch(&g_boot_thread.rsp, next->rsp);
+    }
     irq_restore(flags);
 }
 

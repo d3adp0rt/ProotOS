@@ -6,6 +6,7 @@ _start:
     movq (%rsp), %rdi
     leaq 8(%rsp), %rsi
     leaq 16(%rsp), %rdx
+    andq $-16, %rsp
     call main
     movl %eax, %edi
     movq $60, %rax

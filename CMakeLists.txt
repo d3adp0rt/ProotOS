@@ -280,21 +280,32 @@ add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/libc/crt0.S
     COMMENT "AS [libc] crt0.o"
     VERBATIM)
+foreach(libsrc libc format math)
+    add_custom_command(
+        OUTPUT ${LIBC_DIR}/${libsrc}.o
+        COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
+            -fno-pie -fno-stack-protector -O2 -Wall -Wextra
+            -I${CMAKE_SOURCE_DIR}/libc/include
+            -c ${CMAKE_SOURCE_DIR}/libc/${libsrc}.c -o ${LIBC_DIR}/${libsrc}.o
+        DEPENDS ${CMAKE_SOURCE_DIR}/libc/${libsrc}.c ${CMAKE_SOURCE_DIR}/libc/include/libc.h
+        COMMENT "CC [libc] ${libsrc}.o"
+        VERBATIM)
+endforeach()
 add_custom_command(
-    OUTPUT ${LIBC_DIR}/libc.o
+    OUTPUT ${LIBC_DIR}/setjmp.o
     COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
-        -fno-pie -fno-stack-protector -O2 -Wall -Wextra -mno-sse -mno-mmx
-        -I${CMAKE_SOURCE_DIR}/libc/include
-        -c ${CMAKE_SOURCE_DIR}/libc/libc.c -o ${LIBC_DIR}/libc.o
-    DEPENDS ${CMAKE_SOURCE_DIR}/libc/libc.c ${CMAKE_SOURCE_DIR}/libc/include/libc.h
-    COMMENT "CC [libc] libc.o"
+        -fno-pie -c ${CMAKE_SOURCE_DIR}/libc/setjmp.S -o ${LIBC_DIR}/setjmp.o
+    DEPENDS ${CMAKE_SOURCE_DIR}/libc/setjmp.S
+    COMMENT "AS [libc] setjmp.o"
     VERBATIM)
+set(LIBC_OBJS ${LIBC_DIR}/crt0.o ${LIBC_DIR}/libc.o ${LIBC_DIR}/format.o
+             ${LIBC_DIR}/math.o ${LIBC_DIR}/setjmp.o)
 
 foreach(prog sh echo cat ls rm cp mv ps df ping wget ppkg greet gui)
     add_custom_command(
         OUTPUT ${USER_DIR}/${prog}_prog.o
         COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
-            -fno-pie -fno-stack-protector -O2 -Wall -Wextra -mno-sse -mno-mmx
+            -fno-pie -fno-stack-protector -O2 -Wall -Wextra
             -I${CMAKE_SOURCE_DIR}/libc/include
             -c ${CMAKE_SOURCE_DIR}/user/${prog}.c -o ${USER_DIR}/${prog}_prog.o
         DEPENDS ${CMAKE_SOURCE_DIR}/user/${prog}.c ${CMAKE_SOURCE_DIR}/libc/include/libc.h
@@ -304,11 +315,48 @@ foreach(prog sh echo cat ls rm cp mv ps df ping wget ppkg greet gui)
         OUTPUT ${USER_DIR}/bin_${prog}
         COMMAND ${LD_LLD_EXECUTABLE} -Ttext=0x400000 -e _start
             -o ${USER_DIR}/bin_${prog}
-            ${LIBC_DIR}/crt0.o ${LIBC_DIR}/libc.o ${USER_DIR}/${prog}_prog.o
-        DEPENDS ${LIBC_DIR}/crt0.o ${LIBC_DIR}/libc.o ${USER_DIR}/${prog}_prog.o
+            ${LIBC_OBJS} ${USER_DIR}/${prog}_prog.o
+        DEPENDS ${LIBC_OBJS} ${USER_DIR}/${prog}_prog.o
         COMMENT "LD [user] /bin/${prog}"
         VERBATIM)
 endforeach()
+
+set(LUA_DIR ${CMAKE_SOURCE_DIR}/third_party/lua)
+set(LUA_OBJ_DIR ${CMAKE_BINARY_DIR}/lua)
+file(MAKE_DIRECTORY ${LUA_OBJ_DIR})
+set(LUA_SOURCES
+    lapi lcode lctype ldebug ldo ldump lfunc lgc llex lmem lobject lopcodes
+    lparser lstate lstring ltable ltm lundump lvm lzio
+    lbaselib lcorolib ldblib lstrlib ltablib lmathlib lutf8lib lauxlib)
+set(LUA_OBJS)
+foreach(src ${LUA_SOURCES})
+    add_custom_command(
+        OUTPUT ${LUA_OBJ_DIR}/${src}.o
+        COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
+            -fno-pie -fno-stack-protector -O2 -Wall -Wextra
+            -I${CMAKE_SOURCE_DIR}/libc/include -I${LUA_DIR}
+            -c ${LUA_DIR}/${src}.c -o ${LUA_OBJ_DIR}/${src}.o
+        DEPENDS ${LUA_DIR}/${src}.c
+        COMMENT "CC [lua] ${src}.c"
+        VERBATIM)
+    list(APPEND LUA_OBJS ${LUA_OBJ_DIR}/${src}.o)
+endforeach()
+add_custom_command(
+    OUTPUT ${USER_DIR}/lua_prog.o
+    COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
+        -fno-pie -fno-stack-protector -O2 -Wall -Wextra
+        -I${CMAKE_SOURCE_DIR}/libc/include -I${LUA_DIR}
+        -c ${CMAKE_SOURCE_DIR}/user/lua.c -o ${USER_DIR}/lua_prog.o
+    DEPENDS ${CMAKE_SOURCE_DIR}/user/lua.c ${LUA_DIR}/lua.h ${LUA_DIR}/lauxlib.h
+    COMMENT "CC [user] lua.c"
+    VERBATIM)
+add_custom_command(
+    OUTPUT ${USER_DIR}/bin_lua
+    COMMAND ${LD_LLD_EXECUTABLE} -Ttext=0x400000 -e _start -o ${USER_DIR}/bin_lua
+        ${LIBC_OBJS} ${LUA_OBJS} ${USER_DIR}/lua_prog.o
+    DEPENDS ${LIBC_OBJS} ${LUA_OBJS} ${USER_DIR}/lua_prog.o
+    COMMENT "LD [user] /bin/lua"
+    VERBATIM)
 
 set(INITRAMFS_STAGE ${CMAKE_BINARY_DIR}/initramfs-root)
 set(EXT2_IMG ${CMAKE_BINARY_DIR}/ext2.img)
@@ -341,6 +389,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_wget ${INITRAMFS_STAGE}/bin/wget
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_ppkg ${INITRAMFS_STAGE}/bin/ppkg
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_gui ${INITRAMFS_STAGE}/bin/gui
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_lua ${INITRAMFS_STAGE}/bin/lua
     COMMAND ${CMAKE_COMMAND} -E make_directory ${INITRAMFS_STAGE}/packages
     COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/mkpkg.py ${USER_DIR}/hello.elf ${INITRAMFS_STAGE}/packages/hello.pk usr/bin/hello
     COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/mkpkg.py ${USER_DIR}/bin_greet ${INITRAMFS_STAGE}/packages/greet.pk usr/bin/greet
@@ -349,7 +398,7 @@ add_custom_command(
             ${USER_DIR}/bin_echo ${USER_DIR}/bin_cat ${USER_DIR}/bin_ls ${USER_DIR}/bin_rm
             ${USER_DIR}/bin_cp ${USER_DIR}/bin_mv ${USER_DIR}/bin_ps ${USER_DIR}/bin_df
             ${USER_DIR}/bin_ping ${USER_DIR}/bin_wget ${USER_DIR}/bin_ppkg ${USER_DIR}/bin_greet
-            ${USER_DIR}/bin_gui
+            ${USER_DIR}/bin_gui ${USER_DIR}/bin_lua
             ${EXT2_IMG} ${INITRAMFS_FILES}
     COMMENT "STAGE initramfs"
     VERBATIM)

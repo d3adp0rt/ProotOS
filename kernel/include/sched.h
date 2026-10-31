@@ -54,6 +54,7 @@ struct thread {
     void (*fn)(void *);
     void *arg;
     int exit_code;
+    uint8_t fpu[512] __attribute__((aligned(16)));
 };
 
 void sched_start(void);

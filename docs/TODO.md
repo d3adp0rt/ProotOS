@@ -97,6 +97,28 @@ Known post-M10 work:
 - move GUI into `/init` as the default session instead of a demo command.
 
 
+## M11: languages and self-hosting
+
+Lua 5.4 done:
+
+- vendored `third_party/lua`, core plus base/table/string/math/utf8/coroutine/
+  debug libraries (no io/os/package);
+- `/bin/lua script.lua` and a simple stdin REPL;
+- sample script at `/usr/share/lua/hello.lua` (fib, tables, gmatch,
+  string.format, pcall/error);
+- supporting libc work: free-list allocator with realloc/calloc, FILE-style
+  stdio, floating-point vsnprintf/strtod, setjmp/longjmp, ctype/locale,
+  and a compact libm (sqrt/exp/log/sin/cos/pow/...);
+- kernel FPU context switching via FXSAVE/FXRSTOR, and user/libc builds now
+  use SSE; crt0 aligns the stack for the SysV ABI.
+
+Next:
+
+- C compiler in OS (TinyCC first, then a GCC cross package);
+- C++ compiler/runtime;
+- Python (MicroPython or a CPython port);
+- `ppkg source` builds using the in-OS toolchain.
+
 ## ВЕРНУТЬСЯ: остальное
 
 - Remote ppkg version constraints + source builds.
