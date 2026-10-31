@@ -37,15 +37,23 @@ fixed by:
   dropped instead of corrupting the TLS byte stream);
 - honoring `Content-Length` so a short read is reported as an error.
 
+Certificate verification is enabled:
+
+- the image ships a Mozilla CA bundle at
+  `/etc/ssl/certs/ca-certificates.crt` (unpacked from the initramfs);
+- the kernel parses it once, uses `MBEDTLS_SSL_VERIFY_REQUIRED` and checks
+  hostnames;
+- `self-signed.badssl.com` is rejected with
+  "certificate is not correctly signed by the trusted CA";
+- if the bundle is missing the client logs a warning and falls back to
+  `VERIFY_NONE` so the demo still boots.
+
 Still open:
-- certificate verification is `MBEDTLS_SSL_VERIFY_NONE`; no CA store in the
-  image yet;
 - TLS 1.3 and Ed25519/RSA-PSS certificate chains are not supported by this
   mbedTLS version;
+- no OCSP/CRL checking and no automatic CA bundle refresh (the bundle is a
+  build-time snapshot; refresh by replacing the file in `initramfs/`);
 - no TLS session resumption.
-
-Next: embed a CA bundle (`/etc/ssl/certs/ca.pem`), switch to `VERIFY_REQUIRED`,
-or move to mbedTLS 3.x.
 
 ## ВЕРНУТЬСЯ: remote ppkg
 
@@ -58,7 +66,8 @@ runs it, then `ppkg remove hello`.
 Still open:
 - recursive dependency resolution (dependency fields are parsed and displayed);
 - source builds (stub: no compiler inside the OS);
-- signed registry metadata (needs CA verification first).
+- signed registry metadata (TLS verification is now in place; package
+  signatures are still missing).
 
 ## ВЕРНУТЬСЯ: остальное
 

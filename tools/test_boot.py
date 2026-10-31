@@ -50,6 +50,7 @@ def main() -> int:
         "[net] DNS example.com ->",
         "ping 10.0.2.2: reply",
         "wget: 577 bytes (https)",
+        "[https] CA store loaded",
         "ppkg: registry updated",
         "ppkg: installed hello",
         "ppkg: removed hello",

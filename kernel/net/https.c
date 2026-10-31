@@ -4,8 +4,11 @@
 #include "mbedtls/ctr_drbg.h"
 #include "mbedtls/debug.h"
 #include "mbedtls/error.h"
+#include "mbedtls/x509_crt.h"
 #include "kernel.h"
 #include "timer.h"
+#include "initramfs.h"
+#include "mm.h"
 
 static void tls_dbg(void *ctx, int level, const char *file, int line, const char *str) {
     (void)ctx; (void)level; (void)file; (void)line;
@@ -26,6 +29,47 @@ static int bio_recv(void *ctx, unsigned char *buf, size_t len) {
 static char g_tls_host[64];
 static uint8_t g_tls_ip[4];
 static int g_tls_cached;
+
+/* Trust anchors are unpacked from the initramfs cpio. The bundle is a
+ * concatenation of PEM certificates (Mozilla CA list). */
+static mbedtls_x509_crt g_ca;
+static int g_ca_state; /* 0 = not tried, 1 = ready, -1 = unavailable */
+
+static int ca_store_ready(void) {
+    if (g_ca_state > 0)
+        return 1;
+    if (g_ca_state < 0)
+        return 0;
+
+    const void *data = 0;
+    size_t size = 0;
+    if (initramfs_find("etc/ssl/certs/ca-certificates.crt", &data, &size) != 0 || size == 0) {
+        kprintf("[https] no CA store; certificate verification disabled\n");
+        g_ca_state = -1;
+        return 0;
+    }
+    unsigned char *pem = kmalloc(size + 1);
+    if (!pem) {
+        kprintf("[https] CA store: out of memory\n");
+        g_ca_state = -1;
+        return 0;
+    }
+    memcpy(pem, data, size);
+    pem[size] = 0;
+    mbedtls_x509_crt_init(&g_ca);
+    int ret = mbedtls_x509_crt_parse(&g_ca, pem, size + 1);
+    kfree(pem);
+    if (ret < 0) {
+        kprintf("[https] CA parse failed %d; verification disabled\n", ret);
+        mbedtls_x509_crt_free(&g_ca);
+        g_ca_state = -1;
+        return 0;
+    }
+    kprintf("[https] CA store loaded: %llu bytes, %d skipped\n",
+            (unsigned long long)size, ret);
+    g_ca_state = 1;
+    return 1;
+}
 
 int net_https_get(const char *host, const char *path, char *out, size_t cap) {
     uint8_t ip[4];
@@ -51,7 +95,13 @@ int net_https_get(const char *host, const char *path, char *out, size_t cap) {
     ret = mbedtls_ssl_config_defaults(&conf, MBEDTLS_SSL_IS_CLIENT,
                                       MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT);
     if (ret != 0) { kprintf("[https] config %d\n", ret); goto fail; }
-    mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_NONE);
+    int verify = ca_store_ready();
+    if (verify) {
+        mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+        mbedtls_ssl_conf_ca_chain(&conf, &g_ca, 0);
+    } else {
+        mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_NONE);
+    }
     static const int suites[] = { MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
                                    MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
                                    MBEDTLS_TLS_RSA_WITH_AES_128_GCM_SHA256, 0 };
@@ -75,7 +125,21 @@ int net_https_get(const char *host, const char *path, char *out, size_t cap) {
         char eb[128];
         mbedtls_strerror(ret, eb, sizeof(eb));
         kprintf("[https] handshake %d: %s\n", ret, eb);
+        if (verify && ret == MBEDTLS_ERR_X509_CERT_VERIFY_FAILED) {
+            uint32_t vr = mbedtls_ssl_get_verify_result(&ssl);
+            char info[256];
+            mbedtls_x509_crt_verify_info(info, sizeof(info), "  ", vr);
+            kprintf("[https] verify: %s", info);
+        }
         goto fail;
+    }
+    if (verify) {
+        uint32_t vr = mbedtls_ssl_get_verify_result(&ssl);
+        if (vr != 0) {
+            char info[256];
+            mbedtls_x509_crt_verify_info(info, sizeof(info), "  ", vr);
+            kprintf("[https] verify failed: %s", info);
+        }
     }
 
     char req[256];
