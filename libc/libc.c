@@ -11,6 +11,10 @@
 #include <sys/time.h>
 #include <dlfcn.h>
 #include <signal.h>
+#include <termios.h>
+#include <sys/ioctl.h>
+#include <sys/select.h>
+#include <poll.h>
 
 int errno;
 
@@ -1094,3 +1098,60 @@ int raise(int sig) { (void)sig; return 0; }
 int remove(const char *path) { return unlink(path); }
 
 int execvp(const char *file, char *const argv[]) { (void)file; (void)argv; return -1; }
+
+int tcgetattr(int fd, struct termios *t) {
+    (void)fd;
+    if (!t) return -1;
+    memset(t, 0, sizeof(*t));
+    t->c_cc[VMIN] = 1;
+    return 0;
+}
+int tcsetattr(int fd, int action, const struct termios *t) {
+    (void)fd; (void)action; (void)t;
+    return 0;
+}
+void cfmakeraw(struct termios *t) {
+    if (!t) return;
+    t->c_iflag = 0;
+    t->c_oflag = 0;
+    t->c_cflag = CS8 | CREAD;
+    t->c_lflag = 0;
+    t->c_cc[VMIN] = 1;
+    t->c_cc[VTIME] = 0;
+}
+int tcflush(int fd, int queue) { (void)fd; (void)queue; return 0; }
+speed_t cfgetospeed(const struct termios *t) { (void)t; return B38400; }
+speed_t cfgetispeed(const struct termios *t) { (void)t; return B38400; }
+int cfsetospeed(struct termios *t, speed_t speed) { (void)t; (void)speed; return 0; }
+int cfsetispeed(struct termios *t, speed_t speed) { (void)t; (void)speed; return 0; }
+
+int ioctl(int fd, unsigned long request, ...) {
+    (void)fd;
+    if (request == TIOCGWINSZ) {
+        va_list ap;
+        va_start(ap, request);
+        struct winsize *ws = va_arg(ap, struct winsize *);
+        va_end(ap);
+        if (!ws) return -1;
+        int cols = 80, rows = 25;
+        console_info(&cols, &rows);
+        ws->ws_col = (unsigned short)cols;
+        ws->ws_row = (unsigned short)rows;
+        ws->ws_xpixel = 0;
+        ws->ws_ypixel = 0;
+        return 0;
+    }
+    return -1;
+}
+
+int select(int nfds, fd_set *r, fd_set *w, fd_set *e, struct timeval *timeout) {
+    (void)nfds; (void)r; (void)w; (void)e;
+    if (timeout) sleep_ms((unsigned)(timeout->tv_sec * 1000 + timeout->tv_usec / 1000));
+    return 0;
+}
+
+int poll(struct pollfd *fds, nfds_t nfds, int timeout) {
+    (void)fds; (void)nfds;
+    if (timeout > 0) sleep_ms((unsigned)timeout);
+    return 0;
+}
