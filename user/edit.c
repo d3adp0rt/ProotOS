@@ -7,7 +7,7 @@
 #include <stdio.h>
 
 #define MAXLINES 256
-#define MAXCOLS 160
+#define MAXCOLS 512
 #define BUF_SIZE 65536
 
 static char g_lines[MAXLINES][MAXCOLS];
