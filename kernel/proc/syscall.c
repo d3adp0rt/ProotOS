@@ -39,6 +39,7 @@
 #define SYS_MUNMAP 91
 #define SYS_MPROTECT 92
 #define SYS_RTC_HMS 93
+#define SYS_CONSOLE_INFO 94
 #define SYS_PIPE 22
 #define SYS_DUP2 33
 #define SYS_FCNTL 72
@@ -440,6 +441,13 @@ void syscall_dispatch(struct trap_frame *tf) {
     case SYS_RTC_HMS:
         ret = (long)rtc_hms();
         break;
+    case SYS_CONSOLE_INFO: {
+        int cols = 80, rows = 25;
+        console_text_info(&cols, &rows);
+        int out[2] = {cols, rows};
+        ret = user_copy_to(p, tf->rdi, out, sizeof(out)) == 0 ? 0 : -14;
+        break;
+    }
     case SYS_CONSOLE_GUI:
         console_set_fb_output(tf->rdi == 0);
         ret = 0;

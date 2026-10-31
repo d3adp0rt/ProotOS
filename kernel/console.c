@@ -32,6 +32,10 @@ static struct {
 
 static spinlock_t g_console_lock = SPINLOCK_INIT;
 static int g_fb_output = 1;
+static int g_esc_state;
+static int g_esc_params[4];
+static int g_esc_nparam;
+static int g_esc_cur;
 
 static uint32_t pack_color(uint32_t rgb) {
     if (con.format == PROOT_FB_FORMAT_RGB) {
@@ -235,10 +239,85 @@ void console_clear(void) {
 
 void console_set_fb_output(int enabled) { g_fb_output = enabled; }
 
+static void fb_cursor_cell(int col, int row) {
+    if (!con.fb)
+        return;
+    if (col < 1) col = 1;
+    if (row < 1) row = 1;
+    con.cursor_x = (uint32_t)(col - 1) * con.char_w;
+    con.cursor_y = (uint32_t)(row - 1) * con.char_h;
+    if (con.cursor_x >= con.width)
+        con.cursor_x = con.width - con.char_w;
+    if (con.cursor_y >= con.height)
+        con.cursor_y = con.height - con.char_h;
+}
+
+static void fb_erase_line(void) {
+    if (!con.fb)
+        return;
+    uint32_t bpp = con.bpp / 8;
+    if (bpp != 4) bpp = 4;
+    for (uint32_t y = con.cursor_y; y < con.cursor_y + con.char_h && y < con.height; y++) {
+        uint32_t *row = (uint32_t *)(con.fb + (uint64_t)y * con.pitch);
+        for (uint32_t x = con.cursor_x; x < con.width; x++)
+            row[x] = pack_color(con.bg);
+    }
+}
+
+static int fb_esc_char(char c) {
+    if (g_esc_state == 0) {
+        if (c == 27) {
+            g_esc_state = 1;
+            g_esc_nparam = 0;
+            g_esc_cur = 0;
+            g_esc_params[0] = 0;
+            return 1;
+        }
+        return 0;
+    }
+    if (g_esc_state == 1) {
+        g_esc_state = (c == '[') ? 2 : 0;
+        return 1;
+    }
+    if (c >= '0' && c <= '9') {
+        g_esc_cur = g_esc_cur * 10 + (c - '0');
+        if (g_esc_nparam < 4)
+            g_esc_params[g_esc_nparam] = g_esc_cur;
+        return 1;
+    }
+    if (c == ';') {
+        if (g_esc_nparam < 3)
+            g_esc_nparam++;
+        g_esc_cur = 0;
+        g_esc_params[g_esc_nparam] = 0;
+        return 1;
+    }
+    if (c == 'H' || c == 'f') {
+        int row = g_esc_params[0] ? g_esc_params[0] : 1;
+        int col = g_esc_params[1] ? g_esc_params[1] : 1;
+        fb_cursor_cell(col, row);
+    } else if (c == 'J' && g_esc_params[0] == 2) {
+        fb_fill(con.bg);
+        con.cursor_x = con.cursor_y = 0;
+    } else if (c == 'K') {
+        fb_erase_line();
+    }
+    g_esc_state = 0;
+    return 1;
+}
+
+void console_text_info(int *cols, int *rows) {
+    if (cols) *cols = con.fb ? (int)(con.width / con.char_w) : VGA_COLS;
+    if (rows) *rows = con.fb ? (int)(con.height / con.char_h) : VGA_ROWS;
+}
+
 void console_putc(char c) {
     serial_putc(c);
-    if (con.fb && g_fb_output)
+    if (con.fb && g_fb_output) {
+        if (fb_esc_char(c))
+            return;
         fb_putc(c);
+    }
     else if (con.vga)
         vga_putc(c);
 }

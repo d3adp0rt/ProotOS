@@ -474,6 +474,14 @@ int console_gui(int on) {
 unsigned rtc_hms(void) {
     return (unsigned)syscall0(93);
 }
+int console_info(int *cols, int *rows) {
+    int out[2];
+    if (syscall1(94, (long)out) != 0)
+        return -1;
+    if (cols) *cols = out[0];
+    if (rows) *rows = out[1];
+    return 0;
+}
 int clear_screen(void) { return (int)syscall0(83); }
 
 long net_https_get(const char *host, const char *path, char *buf, size_t cap) {

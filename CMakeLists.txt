@@ -301,7 +301,7 @@ add_custom_command(
 set(LIBC_OBJS ${LIBC_DIR}/crt0.o ${LIBC_DIR}/libc.o ${LIBC_DIR}/format.o
              ${LIBC_DIR}/math.o ${LIBC_DIR}/setjmp.o)
 
-foreach(prog sh echo cat ls rm cp mv ps df ping wget ppkg greet gui hexdump)
+foreach(prog sh echo cat ls rm cp mv ps df ping wget ppkg greet gui hexdump edit)
     add_custom_command(
         OUTPUT ${USER_DIR}/${prog}_prog.o
         COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
@@ -442,6 +442,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_ppkg ${INITRAMFS_STAGE}/bin/ppkg
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_gui ${INITRAMFS_STAGE}/bin/gui
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_hexdump ${INITRAMFS_STAGE}/bin/hexdump
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_edit ${INITRAMFS_STAGE}/bin/edit
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_lua ${INITRAMFS_STAGE}/bin/lua
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_tcc ${INITRAMFS_STAGE}/bin/tcc
     COMMAND ${CMAKE_COMMAND} -E copy ${MP_BUILD}/build/firmware.elf ${INITRAMFS_STAGE}/bin/micropython
@@ -468,6 +469,7 @@ add_custom_command(
             ${USER_DIR}/bin_cp ${USER_DIR}/bin_mv ${USER_DIR}/bin_ps ${USER_DIR}/bin_df
             ${USER_DIR}/bin_ping ${USER_DIR}/bin_wget ${USER_DIR}/bin_ppkg ${USER_DIR}/bin_greet
             ${USER_DIR}/bin_gui ${USER_DIR}/bin_lua ${USER_DIR}/bin_tcc ${USER_DIR}/bin_hexdump
+            ${USER_DIR}/bin_edit
             ${MP_BUILD}/build/firmware.elf
             ${EXT2_IMG} ${INITRAMFS_FILES}
     COMMENT "STAGE initramfs"

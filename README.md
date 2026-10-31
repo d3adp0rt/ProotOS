@@ -6,7 +6,7 @@ research prototype. Monolithic kernel, own bootloader, own userspace.
 **Status: M11 — Lua, C and Python run in ProotOS.** The kernel brings up consoles, IDT, memory,
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
-`cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, DHCP, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
+`cp`, `mv`, `ps`, `df`, `/bin/edit` (nano-like full-screen editor). Networking: RTL8139 RX/TX, DHCP, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
 Packages: `/bin/ppkg` downloads the registry over HTTPS and installs/removes
 tar-based `.pk` packages (`update`, `list`, `search`, `install`, `remove`),
 resolving dependencies recursively (demo installs `hello`, which pulls `greet`).
@@ -19,13 +19,15 @@ corner resizing and close buttons; a screen backbuffer with damage-tracked
 clipped redraws; a taskbar launcher; multiple terminal windows with scrollback,
 wrapping, selection and copy/paste, each running `/bin/sh` over its own pipes;
 a file manager with keyboard navigation, directory browsing and text preview;
-and a text editor with word wrap, undo and Ctrl+S save. Input is a PS/2 IntelliMouse
+a text editor with word wrap, undo and Ctrl+S save, and a terminal ANSI
+console with a nano-like `/bin/edit`. Input is a PS/2 IntelliMouse
 (buttons, wheel, Ctrl combos). Syscalls 33/72/85/86/88/89, `/dev/mouse`.
 
 Languages: Lua 5.4 (`/bin/lua`), TinyCC 0.9.27 (`/bin/tcc -nostdlib -run
 file.c` for JIT, or `tcc -static -nostdlib -o prog ...` to produce a static
 ELF, with `/usr/include` and the in-kernel libc), and MicroPython 1.24
-(`/bin/micropython script.py` or a REPL) all run in user space. Python uses
+(`/bin/micropython script.py` or a REPL with working arrows/history) all run
+in user space. Python uses
 the minimal port with GC, floats, dicts, comprehensions, sorted and string
 formatting; it imports `.py` modules from `/usr/share/python` and `/lib`
 through the VFS (`import mathutil` works). The libc now has a

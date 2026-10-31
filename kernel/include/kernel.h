@@ -34,6 +34,7 @@ void console_fb_info(struct fb_info *out);
 uint64_t console_fb_phys(void);
 uint64_t console_fb_size(void);
 void console_set_fb_output(int enabled);
+void console_text_info(int *cols, int *rows);
 
 void kprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 int ksnprintf(char *out, size_t cap, const char *fmt, ...) __attribute__((format(printf, 3, 4)));

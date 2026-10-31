@@ -21,6 +21,10 @@ int mp_hal_stdin_rx_chr(void) {
     unsigned char c = 0;
     #if MICROPY_MIN_USE_STDOUT
     static int infd = -1;
+    static char pending[8];
+    static int plen, pidx;
+    if (pidx < plen)
+        return (unsigned char)pending[pidx++];
     if (infd < 0) {
         infd = 0;
         if (fcntl(0, F_GETFL, 0) < 0)
@@ -33,6 +37,25 @@ int mp_hal_stdin_rx_chr(void) {
         if (r < 0)
             return 0;
         sleep_ms(10);
+    }
+    /* Translate ProotOS key codes into the VT100 sequences readline expects. */
+    const char *seq = 0;
+    switch (c) {
+    case '\n': c = '\r'; break;
+    case 0x80: seq = "\x1b[A"; break;   /* up */
+    case 0x81: seq = "\x1b[B"; break;   /* down */
+    case 0x84: seq = "\x1b[D"; break;   /* left */
+    case 0x85: seq = "\x1b[C"; break;   /* right */
+    case 0x82: seq = "\x1b[5~"; break;  /* page up */
+    case 0x83: seq = "\x1b[6~"; break;  /* page down */
+    default: break;
+    }
+    if (seq) {
+        plen = 0;
+        while (seq[plen] && plen < (int)sizeof(pending))
+            pending[plen] = seq[plen], plen++;
+        pidx = 1;
+        return (unsigned char)pending[0];
     }
     #elif MICROPY_MIN_USE_STM32_MCU
     // wait for RXNE

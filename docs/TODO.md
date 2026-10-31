@@ -141,6 +141,16 @@ Executable linking done:
   resulting static ELF runs via the normal loader;
 - demo prints `tcc: standalone executable works` and squares 1..5.
 
+Also done:
+
+- terminal ANSI support in the framebuffer console (`CSI H/J/K`);
+- `/bin/edit`: nano-like full-screen editor (arrows, PgUp/PgDn, Tab,
+  Enter/Backspace, Ctrl+S save, Ctrl+Q quit, status line);
+- TCC startup no longer hangs: help/version text is printed with `fputs`
+  instead of `printf(help)` (long format strings exposed a formatter stall);
+- MicroPython REPL input translates ProotOS key codes to VT100 sequences and
+  Enter to `\r`, so line editing/history work.
+
 Still open: C++ toolchain/runtime, MicroPython `open()`/write support.
 
 MicroPython done:

@@ -259,13 +259,13 @@ redo:
 
     if ((n | t) == 0) {
         if (opt == OPT_HELP)
-            return printf(help), 1;
+            return fputs(help, stdout), 1;
         if (opt == OPT_HELP2)
-            return printf(help2), 1;
+            return fputs(help2, stdout), 1;
         if (opt == OPT_M32 || opt == OPT_M64)
             tcc_tool_cross(s, argv, opt); /* never returns */
         if (s->verbose)
-            printf(version);
+            fputs(version, stdout);
         if (opt == OPT_AR)
             return tcc_tool_ar(s, argc, argv);
 #ifdef TCC_TARGET_PE
