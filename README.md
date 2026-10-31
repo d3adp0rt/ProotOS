@@ -23,7 +23,8 @@ and a text editor with word wrap, undo and Ctrl+S save. Input is a PS/2 IntelliM
 (buttons, wheel, Ctrl combos). Syscalls 33/72/85/86/88/89, `/dev/mouse`.
 
 Languages: Lua 5.4 (`/bin/lua`), TinyCC 0.9.27 (`/bin/tcc -nostdlib -run
-file.c`, with `/usr/include` and the in-kernel libc), and MicroPython 1.24
+file.c` for JIT, or `tcc -static -nostdlib -o prog ...` to produce a static
+ELF, with `/usr/include` and the in-kernel libc), and MicroPython 1.24
 (`/bin/micropython script.py` or a REPL) all run in user space. Python uses
 the minimal port with GC, floats, dicts, comprehensions, sorted and string
 formatting; it imports `.py` modules from `/usr/share/python` and `/lib`

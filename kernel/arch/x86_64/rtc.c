@@ -27,6 +27,24 @@ static uint8_t bcd_to_bin(uint8_t value) {
     return (uint8_t)((value & 0x0f) + ((value >> 4) * 10));
 }
 
+uint32_t rtc_hms(void) {
+    for (int spin = 0; spin < 1000000 && update_in_progress(); spin++) {
+        __asm__ volatile("pause");
+    }
+    uint8_t sec = cmos_read(0x00);
+    uint8_t min = cmos_read(0x02);
+    uint8_t hour = cmos_read(0x04);
+    uint8_t status_b = cmos_read(0x0b);
+    if (!(status_b & 0x04)) {
+        sec = bcd_to_bin(sec);
+        min = bcd_to_bin(min);
+        hour = bcd_to_bin(hour & 0x7f) | (hour & 0x80);
+    }
+    if (!(status_b & 0x02) && (hour & 0x80))
+        hour = (uint8_t)(((hour & 0x7f) + 12) % 24);
+    return ((uint32_t)hour << 16) | ((uint32_t)min << 8) | sec;
+}
+
 void rtc_print(void) {
     for (int spin = 0; spin < 1000000 && update_in_progress(); spin++) {
         __asm__ volatile("pause");

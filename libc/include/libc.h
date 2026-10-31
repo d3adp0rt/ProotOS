@@ -56,6 +56,7 @@ int fb_info(struct fb_info *out);
 void *fb_map(void);
 int fb_unmap(void);
 int console_gui(int on);
+unsigned rtc_hms(void);
 int statfs(const char *path, struct statfs *st);
 int readdir(const char *path, unsigned index, char *name, size_t len);
 long getprocs(char *buf, size_t len);

@@ -68,6 +68,8 @@ def main() -> int:
         "tcc: hello from compiled C",
         "tcc: fib(12) = 144",
         "tcc: sqrt(2) = 1.41421",
+        "tcc: standalone executable works",
+        "tcc: square(5) = 25",
         "MicroPython on ProotOS",
         "import mathutil: fact(6) = 720",
         "fib: [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]",

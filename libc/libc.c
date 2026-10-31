@@ -471,6 +471,9 @@ int fb_unmap(void) {
 int console_gui(int on) {
     return (int)syscall1(89, on);
 }
+unsigned rtc_hms(void) {
+    return (unsigned)syscall0(93);
+}
 int clear_screen(void) { return (int)syscall0(83); }
 
 long net_https_get(const char *host, const char *path, char *buf, size_t cap) {
@@ -499,7 +502,7 @@ char *strstr(const char *h, const char *n) {
     return 0;
 }
 
-#define HEAP_SIZE (2 * 1024 * 1024)
+#define HEAP_SIZE (4 * 1024 * 1024)
 #define HEAP_MAGIC 0x48454150u
 struct heap_block {
     size_t size;

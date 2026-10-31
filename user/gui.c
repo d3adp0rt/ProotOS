@@ -6,6 +6,7 @@
  * shell terminals over pipes. Usage: gui [seconds] (default: until ESC).
  */
 #include "libc.h"
+#include <stdio.h>
 #include "../third_party/fonts/font8x8_basic.h"
 
 #define MAX_WINS 7
@@ -897,9 +898,11 @@ static void taskbar(void) {
     fill(230 + MAX_WINS * 116, 7, 140, 24, 0x065f46);
     frame(230 + MAX_WINS * 116, 7, 140, 24, 0x10b981);
     text(230 + MAX_WINS * 116 + 8, 15, "+Terminal", 0xd1fae5, 1);
-    fill(230 + MAX_WINS * 116 + 144, 7, 88, 24, 0x7c2d12);
-    frame(230 + MAX_WINS * 116 + 144, 7, 88, 24, 0xea580c);
-    text(230 + MAX_WINS * 116 + 152, 15, "+Editor", 0xffedd5, 1);
+    unsigned t = rtc_hms();
+    char clock[16];
+    snprintf(clock, sizeof(clock), "%02u:%02u:%02u", (t >> 16) & 0xff, (t >> 8) & 0xff,
+             t & 0xff);
+    text((int)g_info.width - 96, 15, clock, 0xe5e7eb, 1);
 }
 
 static void blit_back(int x, int y, int w, int h) {
@@ -1133,10 +1136,6 @@ static int g_resize = -1;
 
 static void handle_press(int x, int y) {
     if (y < TASKBAR_H) {
-        if (x >= 230 + MAX_WINS * 116 + 144 && x < 230 + MAX_WINS * 116 + 232) {
-            editor_open("/untitled");
-            return;
-        }
         if (x >= 230 + MAX_WINS * 116 && x < 230 + MAX_WINS * 116 + 140) {
             int n = 0;
             for (int i = 0; i < MAX_WINS; i++)
@@ -1260,6 +1259,7 @@ int main(int argc, char **argv) {
     draw_cursor(cx, cy);
 
     int events = 0, frames = 0;
+    unsigned last_clock = rtc_hms();
     int limit = seconds > 0 ? seconds * 50 : -1;
     int buttons = 0;
 
@@ -1305,6 +1305,9 @@ int main(int argc, char **argv) {
                     if (w->y < TASKBAR_H) w->y = TASKBAR_H;
                     if (w->x + w->w > (int)g_info.width) w->x = (int)g_info.width - w->w;
                     if (w->y + w->h > (int)g_info.height) w->y = (int)g_info.height - w->h;
+                    if (w->x < 12) w->x = 0;
+                    if (w->x + w->w > (int)g_info.width - 12)
+                        w->x = (int)g_info.width - w->w;
                     damage_add(w->x - 8, w->y - 8, w->w + 16, w->h + 16);
                 }
                 if (g_sel_win >= 0 && buttons) {
@@ -1421,6 +1424,11 @@ int main(int argc, char **argv) {
         if (quit)
             break;
 
+        unsigned now_clock = rtc_hms();
+        if (now_clock != last_clock) {
+            last_clock = now_clock;
+            damage_add((int)g_info.width - 96, 0, 96, TASKBAR_H);
+        }
         if (g_damage_on) {
             damage_add(ox, oy, CUR_W, CUR_H);
             damage_add(cx, cy, CUR_W, CUR_H);

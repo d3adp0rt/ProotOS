@@ -984,6 +984,10 @@ static struct sym_attr * put_got_entry(TCCState *s1, int dyn_reloc_type,
 	    put_elf_reloc(s1->dynsym, s1->got, got_offset, dyn_reloc_type,
 			  attr->dyn_index);
 	}
+    } else if (s1->output_type == TCC_OUTPUT_EXE) {
+        /* Static executable: store the absolute symbol address in the GOT. */
+        put_elf_reloc(symtab_section, s1->got, got_offset, R_X86_64_64,
+                      sym_index);
     } else {
         put_elf_reloc(symtab_section, s1->got, got_offset, dyn_reloc_type,
                       sym_index);
@@ -1837,7 +1841,8 @@ static int final_sections_reloc(TCCState *s1)
         /* On X86 gdb 7.3 works in any case but gdb 6.6 will crash if SHF_ALLOC
         checking is removed */
 #else
-        if (s->reloc && s != s1->got)
+        if (s->reloc && (s != s1->got ||
+            (s1->static_link && s1->output_type == TCC_OUTPUT_EXE)))
         /* On X86_64 gdb 7.3 will crash if SHF_ALLOC checking is present */
 #endif
             relocate_section(s1, s);
@@ -2206,6 +2211,9 @@ static int elf_output_file(TCCState *s1, const char *filename)
                 }
             }
         }
+
+        if (!dynamic && file_type == TCC_OUTPUT_EXE && s1->plt && s1->got)
+            relocate_plt(s1);
 
         /* if building executable or DLL, then relocate each section
            except the GOT which is already relocated */

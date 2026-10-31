@@ -93,6 +93,8 @@ Known post-M10 work:
 
 - per-window window backbuffers (currently one screen backbuffer);
 - terminal search and persistent clipboard across apps;
+- C++ toolchain/runtime;
+- MicroPython filesystem write APIs;
 - signed package metadata, NVMe/USB/audio drivers;
 - move GUI into `/init` as the default session instead of a demo command.
 
@@ -128,12 +130,18 @@ TinyCC done (JIT):
 The image now installs `/usr/include` (libc + TCC wrapper headers), libc
 sources at `/usr/src/libc` and objects at `/usr/lib/prootos`.
 
-Limitations: executable linking is still WIP. TCC emits PLT/GOT entries for
-calls across modules; static-mode patching needs both absolute GOT
-relocations and relocate_plt(). A patched host build produces a correct static
-ELF, but in the in-OS build the same changes broke `-run` (relocation errors),
-so they are not enabled. `-run` (JIT) remains the supported path. No C++
-runtime yet.
+Executable linking done:
+
+- TCC's static EXE path now uses absolute `R_X86_64_64` GOT slots, applies
+  `.got` relocations (`final_sections_reloc`) and calls `relocate_plt()` when
+  there is no dynamic section; the patches are scoped to `TCC_OUTPUT_EXE` so
+  `-run` keeps its JUMP_SLOT path;
+- `tcc -static -nostdlib -o /exe.elf exe.c /usr/lib/prootos/*.o ...` links
+  against the prebuilt libc objects (or `/usr/src/libc` sources) and the
+  resulting static ELF runs via the normal loader;
+- demo prints `tcc: standalone executable works` and squares 1..5.
+
+Still open: C++ toolchain/runtime, MicroPython `open()`/write support.
 
 MicroPython done:
 
