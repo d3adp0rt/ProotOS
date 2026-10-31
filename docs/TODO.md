@@ -125,8 +125,14 @@ TinyCC done (JIT):
   `fputc`, `strtof/strtold`, POSIX `struct stat`, `<sys/*>`, `<inttypes.h>`,
   `<dlfcn.h>`, `<signal.h>` shims, guarded heap free list.
 
-Limitations: JIT only (no executable output yet), no standard headers/libs
-installed in the image, no C++ runtime.
+The image now installs `/usr/include` (libc + TCC wrapper headers), libc
+sources at `/usr/src/libc` and objects at `/usr/lib/prootos`.
+
+Limitations: executable linking is not finished. TCC emits PLT/GOT entries for
+calls into separately linked libc objects and the resulting static ELF jumps
+through unresolved slots; it also needs libtcc1 helpers (`__va_start`,
+`__fixunsdfdi`, ...). JIT (`-run`) works and is the supported path. No C++
+runtime yet.
 
 Next:
 

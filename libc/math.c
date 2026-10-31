@@ -5,6 +5,15 @@
 #define LN10 2.30258509299404568402
 #define PI 3.14159265358979323846
 
+static double make_inf(void) {
+    volatile double z = 0.0;
+    return 1.0 / z;
+}
+static double make_nan(void) {
+    volatile double z = 0.0;
+    return z / z;
+}
+
 typedef union {
     double d;
     uint64_t u;
@@ -44,7 +53,7 @@ double round(double x) {
 
 double sqrt(double x) {
     if (x < 0)
-        return NAN;
+        return make_nan();
     if (x == 0 || x != x)
         return x;
     dbits b;
@@ -58,7 +67,7 @@ double sqrt(double x) {
 
 double fmod(double x, double y) {
     if (y == 0 || x != x || y != y)
-        return NAN;
+        return make_nan();
     double q = trunc(x / y);
     double r = x - q * y;
     if (fabs(r) >= fabs(y))
@@ -95,7 +104,7 @@ double exp(double x) {
     if (x != x)
         return x;
     if (x > 700)
-        return INFINITY;
+        return make_inf();
     if (x < -745)
         return 0;
     int k = (int)round(x / LN2);
@@ -110,9 +119,9 @@ double exp(double x) {
 
 double log(double x) {
     if (x < 0)
-        return NAN;
+        return make_nan();
     if (x == 0)
-        return -INFINITY;
+        return -make_inf();
     int e = 0;
     double m = frexp(x, &e);
     if (m < 0.70710678118654752440) {
@@ -136,14 +145,14 @@ double pow(double x, double y) {
     if (y == 0)
         return 1.0;
     if (x == 0)
-        return y > 0 ? 0.0 : INFINITY;
+        return y > 0 ? 0.0 : make_inf();
     if (x < 0) {
         long long iy = (long long)y;
         if ((double)iy == y) {
             double r = pow(-x, y);
             return (iy & 1) ? -r : r;
         }
-        return NAN;
+        return make_nan();
     }
     if ((double)(long long)y == y && fabs(y) < 64) {
         long long n = (long long)y;

@@ -210,8 +210,13 @@ int process_exec_argv(struct process *p, const char *name, char **argv, int argc
                 return -1;
             ptrs[i] = sp;
         }
-        sp &= ~7ULL;
-        sp -= (uint64_t)(argc + 3) * 8;
+        /* Align the initial stack so the ELF entry point sees the SysV
+         * function-entry alignment (%rsp % 16 == 8). TCC's _start assumes
+         * this and calls libc with aligned SSE stack slots. */
+        sp &= ~15ULL;
+        uint64_t need = (uint64_t)(argc + 2) * 8;
+        need = (need + 15) & ~15ULL;
+        sp -= need + 8;
         uint64_t argc64 = (uint64_t)argc;
         uint64_t zero = 0;
         if (user_copy_to(&tmp, sp, &argc64, 8) != 0)
