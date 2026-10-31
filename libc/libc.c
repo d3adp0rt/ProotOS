@@ -464,6 +464,19 @@ time_t time(time_t *t) {
 
 clock_t clock(void) { return 0; }
 double difftime(time_t a, time_t b) { return (double)(a - b); }
+int clock_gettime(int clk, struct timespec *ts) {
+    (void)clk;
+    if (ts) { ts->tv_sec = 0; ts->tv_nsec = 0; }
+    return 0;
+}
+int nanosleep(const struct timespec *req, struct timespec *rem) {
+    (void)rem;
+    if (req && req->tv_sec == 0 && req->tv_nsec > 0)
+        sleep_ms((unsigned)((req->tv_nsec + 999999) / 1000000));
+    else if (req)
+        sleep_ms((unsigned)(req->tv_sec * 1000));
+    return 0;
+}
 
 static struct tm g_tm;
 struct tm *localtime(const time_t *t) {
