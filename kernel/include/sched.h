@@ -8,7 +8,7 @@
 #include "spinlock.h"
 
 #define SCHED_MAX_CPUS 64
-#define THREAD_STACK_SIZE 16384
+#define THREAD_STACK_SIZE 65536
 
 enum thread_state {
     THREAD_READY = 0,
