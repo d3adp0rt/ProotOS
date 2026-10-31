@@ -107,8 +107,41 @@ int net_https_get(const char *host, const char *path, char *out, size_t cap) {
         }
     }
     if (!body) return -1;
-    size_t blen = total - (size_t)(body - out);
+    size_t hlen = (size_t)(body - out);
+    size_t blen = total - hlen;
+
+    /* Honor Content-Length when present so a short TLS/TCP read is reported
+     * as an error instead of being mistaken for a complete body. */
+    long want = -1;
+    for (size_t i = 0; i + 16 < hlen; i++) {
+        if ((out[i] == 'C' || out[i] == 'c') &&
+            (out[i+1] == 'o' || out[i+1] == 'O') &&
+            (out[i+2] == 'n' || out[i+2] == 'N') &&
+            (out[i+3] == 't' || out[i+3] == 'T') &&
+            (out[i+4] == 'e' || out[i+4] == 'E') &&
+            (out[i+5] == 'n' || out[i+5] == 'N') &&
+            (out[i+6] == 't' || out[i+6] == 'T') &&
+            out[i+7] == '-' &&
+            (out[i+8] == 'L' || out[i+8] == 'l') &&
+            (out[i+9] == 'e' || out[i+9] == 'E') &&
+            (out[i+10] == 'n' || out[i+10] == 'N') &&
+            (out[i+11] == 'g' || out[i+11] == 'G') &&
+            (out[i+12] == 't' || out[i+12] == 'T') &&
+            (out[i+13] == 'h' || out[i+13] == 'H') &&
+            out[i+14] == ':') {
+            size_t j = i + 15;
+            while (j < hlen && (out[j] == ' ' || out[j] == '\t')) j++;
+            long v = 0; int digits = 0;
+            while (j < hlen && out[j] >= '0' && out[j] <= '9') { v = v * 10 + (out[j] - '0'); j++; digits++; }
+            if (digits) want = v;
+            break;
+        }
+    }
     memmove(out, body, blen);
+    if (want >= 0 && (size_t)want != blen) {
+        kprintf("[https] short body: %llu/%ld bytes\n", (unsigned long long)blen, want);
+        return -2;
+    }
     kprintf("[https] %s %s: %llu bytes\n", host, path, (unsigned long long)blen);
     return (int)blen;
 

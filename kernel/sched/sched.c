@@ -180,8 +180,9 @@ void schedule(void) {
 
     struct thread *prev = cpu->current;
     if (!prev) {
-        struct thread *next = pick_next_locked(cpu);
-        cpu->current = next;
+        /* Scheduling is not active on this CPU yet (early boot or AP idle).
+         * Do not pop anything here: a timer tick between kthread_create()
+         * and sched_start() used to dispatch the new thread and orphan it. */
         cpu->need_resched = 0;
         spin_unlock(&cpu->lock);
         irq_restore(flags);
@@ -277,6 +278,9 @@ void sched_maybe_resched(int need_resched) {
 }
 
 void sched_start(void) {
+    /* Mask interrupts before touching scheduler state: a tick between
+     * enqueueing the test thread and this point must not dispatch it. */
+    uint64_t flags = irq_save();
     struct cpu *cpu = cpu_self();
     cpu->idle = thread_alloc(idle_main, 0, "idle", SCHED_IDLE, 0, 0);
     if (!cpu->idle)
@@ -286,7 +290,6 @@ void sched_start(void) {
     g_boot_thread.cpu = cpu->index;
     g_boot_thread.state = THREAD_RUNNING;
 
-    uint64_t flags = irq_save();
     spin_lock(&cpu->lock);
     struct thread *next = pick_next_locked(cpu);
     cpu->current = next;

@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +37,8 @@ def main() -> int:
     ap.add_argument("--fresh-vars", action="store_true")
     ap.add_argument("--keep-disk", action="store_true")
     ap.add_argument("--pcap", default="")
+    ap.add_argument("--expect", default="",
+                    help="stop QEMU once this text appears on the serial console")
     args = ap.parse_args()
 
     iso = Path(args.iso)
@@ -84,11 +87,36 @@ def main() -> int:
 
     print("+", " ".join(cmd), file=sys.stderr)
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    try:
-        out, _ = proc.communicate(timeout=args.timeout if args.timeout > 0 else None)
-    except subprocess.TimeoutExpired:
+
+    if args.expect:
+        chunks: list[str] = []
+        found = threading.Event()
+
+        def _reader() -> None:
+            for line in proc.stdout:  # type: ignore[union-attr]
+                chunks.append(line)
+                sys.stdout.write(line)
+                sys.stdout.flush()
+                if args.expect in "".join(chunks):
+                    found.set()
+
+        th = threading.Thread(target=_reader, daemon=True)
+        th.start()
+        found.wait(timeout=args.timeout if args.timeout > 0 else None)
         proc.kill()
-        out, _ = proc.communicate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        th.join(timeout=2)
+        out = "".join(chunks)
+        return proc.returncode or 0
+    else:
+        try:
+            out, _ = proc.communicate(timeout=args.timeout if args.timeout > 0 else None)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, _ = proc.communicate()
     sys.stdout.write(out)
     return proc.returncode or 0
 

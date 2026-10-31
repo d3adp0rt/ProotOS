@@ -270,6 +270,13 @@ int tcp_conn_read(void *data, size_t len) {
                      &rack, 1) == 0) {
             if (flags & TCP_RST) { g_sock.open = 0; return -1; }
             if (n) {
+                /* Drop duplicates and out-of-order segments; the peer will
+                 * retransmit. Accepting them corrupts the TLS byte stream. */
+                if (rseq != g_sock.ack) {
+                    tcp_send(g_gw_mac, g_sock.ip, g_sock.sport, g_sock.dport, g_sock.seq,
+                             g_sock.ack, TCP_ACK, 0, 0);
+                    continue;
+                }
                 g_sock.ack = rseq + (uint32_t)n;
                 g_tcp_len = n;
                 g_tcp_pos = 0;
@@ -281,7 +288,15 @@ int tcp_conn_read(void *data, size_t len) {
                 g_tcp_pos = out;
                 return (int)out;
             }
-            if (flags & TCP_FIN) { g_sock.open = 0; return 0; }
+            if (flags & TCP_FIN) {
+                if (rseq == g_sock.ack) {
+                    g_sock.ack++;
+                    tcp_send(g_gw_mac, g_sock.ip, g_sock.sport, g_sock.dport, g_sock.seq,
+                             g_sock.ack, TCP_ACK, 0, 0);
+                }
+                g_sock.open = 0;
+                return 0;
+            }
         }
     }
     return -1;

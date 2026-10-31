@@ -28,28 +28,42 @@
 
 ## ВЕРНУТЬСЯ: TLS / HTTPS
 
-TLS 1.2 works with mbedTLS for one HTTPS request per boot. Known gaps:
-- certificate verification is `MBEDTLS_SSL_VERIFY_NONE`;
-- a second HTTPS connection in the same boot can fail during X.509 chain
-  parsing (`x509_crt_parse_der`), likely load-balanced certificate/chain state;
-- TLS 1.3 not enabled.
-Fix multi-session/TLS1.3, add CA store, then enable remote ppkg update.
-Remote ppkg code path exists (`ppkg update` -> registry bundle over HTTPS) but is
-not enabled in the shell demo until multi-session is fixed. ECDSA-only cipher selection and IP caching make the first HTTPS request
-reliable; a second request can still receive a different chain (Ed25519/RSA-PSS
-or an extension mbedTLS 2.28 cannot parse) and fail X.509 parsing. Next step:
-TLS 1.3/Ed25519-capable stack or a persistent TLS session.
+TLS 1.2 works with mbedTLS 2.28 and supports multiple HTTPS connections per
+boot (demo does two `wget` requests plus a registry fetch). Multi-session was
+fixed by:
+
+- increasing the RTL8139 RX ring from 8K to 64K and handling wrap at the header;
+- validating TCP sequence numbers (duplicates/out-of-order segments are now
+  dropped instead of corrupting the TLS byte stream);
+- honoring `Content-Length` so a short read is reported as an error.
+
+Still open:
+- certificate verification is `MBEDTLS_SSL_VERIFY_NONE`; no CA store in the
+  image yet;
+- TLS 1.3 and Ed25519/RSA-PSS certificate chains are not supported by this
+  mbedTLS version;
+- no TLS session resumption.
+
+Next: embed a CA bundle (`/etc/ssl/certs/ca.pem`), switch to `VERIFY_REQUIRED`,
+or move to mbedTLS 3.x.
 
 ## ВЕРНУТЬСЯ: remote ppkg
 
 Repos created: `prootos-registry`, `prootos-packages`, `prootos-pkg-hello`.
-`ppkg` still reads a local index (`/var/lib/ppkg/index`); remote fetch needs
-TLS/HTTPS. Registry flow: registry -> packages index -> `.pk` URL.
+`ppkg update` now downloads `registry.tar` over HTTPS and extracts it into
+`/var/lib/ppkg/`, so the index and package payload really come from the remote
+registry. The shell demo runs `ppkg update`, `ppkg list`, `ppkg install hello`,
+runs it, then `ppkg remove hello`.
+
+Still open:
+- recursive dependency resolution (dependency fields are parsed and displayed);
+- source builds (stub: no compiler inside the OS);
+- signed registry metadata (needs CA verification first).
 
 ## ВЕРНУТЬСЯ: остальное
 
-- Remote ppkg update + recursive dependencies.
-- TLS multi-session/certificate verification.
+- Remote ppkg recursive dependencies + source builds.
+- TLS certificate verification / CA store / TLS 1.3.
 - NVMe, USB xHCI/HID/storage, AC'97 audio.
 - COW fork, full signals/ptrace, `syscall/sysret`.
 - musl port, more coreutils/TUI.

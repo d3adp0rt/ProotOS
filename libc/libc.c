@@ -102,6 +102,13 @@ int strncmp(const char *a, const char *b, size_t n) {
     }
     return n ? (unsigned char)*a - (unsigned char)*b : 0;
 }
+char *strcat(char *d, const char *s) {
+    char *r = d;
+    while (*d) d++;
+    while ((*d++ = *s++)) {}
+    return r;
+}
+
 char *strcpy(char *d, const char *s) {
     char *r = d;
     while ((*d++ = *s++)) {

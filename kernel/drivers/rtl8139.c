@@ -8,7 +8,8 @@
 
 #define RTL_VENDOR 0x10ec
 #define RTL_DEVICE 0x8139
-#define RX_SIZE (8192 + 16 + 1536)
+#define RX_WRAP 65536u
+#define RX_SIZE (RX_WRAP + 16 + 1536)
 #define TX_SIZE 2048
 
 static uint16_t g_io;
@@ -20,6 +21,7 @@ static uint64_t g_tx_phys;
 static int g_tx_index;
 static int g_ready;
 static uint16_t g_capr;
+static uint8_t *g_rx_ring;
 
 static inline void outb(uint16_t p, uint8_t v) {
     __asm__ volatile("outb %0,%1" ::"a"(v), "Nd"(p));
@@ -74,12 +76,14 @@ int rtl8139_init(void) {
     if (!g_rx_phys || !g_tx_phys)
         return -1;
     g_rx = PHYS_TO_VIRT(g_rx_phys);
+    g_rx_ring = g_rx;
     g_tx = PHYS_TO_VIRT(g_tx_phys);
     memset(g_rx, 0, RX_SIZE);
     memset(g_tx, 0, 4 * TX_SIZE);
 
     outl(g_io + 0x30, (uint32_t)g_rx_phys);   /* RBSTART */
-    outl(g_io + 0x44, 0x0000000f | (1 << 7)); /* RCR: accept all, wrap, 8K */
+    /* RCR: accept all, wrap, 64K ring, unlimited DMA burst. */
+    outl(g_io + 0x44, 0x0000000f | (1 << 7) | (3 << 11) | (7 << 8));
     outl(g_io + 0x40, 0x03000700);            /* TCR */
     outl(g_io + 0x3c, 0);                     /* IMR */
     outl(g_io + 0x3e, 0xffff);                /* clear ISR */
@@ -92,24 +96,41 @@ int rtl8139_init(void) {
     return 0;
 }
 
+static uint8_t rx_byte(uint32_t off) {
+    return g_rx_ring[off % RX_WRAP];
+}
+
 int rtl8139_poll(void *frame, size_t cap, size_t *out_len) {
     if (!g_ready || !frame) return 0;
     uint16_t cbr = inw(g_io + 0x3a);
-    if (cbr == g_capr) return 0;
-    uint8_t *hdr = g_rx + g_capr;
-    uint16_t status = *(uint16_t *)hdr;
-    uint16_t len = *(uint16_t *)(hdr + 2);
-    if (len < 4 || len > 1600) { g_capr = 0; outl(g_io + 0x38, 0); return -1; }
+    uint32_t capoff = g_capr;
+    if (cbr == (uint16_t)capoff) return 0;
+    uint8_t *hdr = g_rx_ring + (capoff % RX_WRAP);
+    uint16_t status, len;
+    /* Header can straddle the wrap point. */
+    if ((capoff % RX_WRAP) <= RX_WRAP - 4) {
+        status = (uint16_t)(hdr[0] | (hdr[1] << 8));
+        len = (uint16_t)(hdr[2] | (hdr[3] << 8));
+    } else {
+        status = (uint16_t)(rx_byte(capoff) | (rx_byte(capoff + 1) << 8));
+        len = (uint16_t)(rx_byte(capoff + 2) | (rx_byte(capoff + 3) << 8));
+    }
+    if (len < 4 || len > 1600) {
+        /* Desync: reset the ring and let the stack recover. */
+        g_capr = 0;
+        outw(g_io + 0x38, 0);
+        outl(g_io + 0x3e, 0xffff);
+        return -1;
+    }
     uint16_t payload = (uint16_t)(len - 4);
     if (payload > cap) payload = (uint16_t)cap;
-    uint16_t off = (uint16_t)(g_capr + 4);
-    for (uint16_t i = 0; i < payload; i++) {
-        ((uint8_t *)frame)[i] = g_rx[(off + i) % 8192];
-    }
+    uint32_t off = capoff + 4;
+    for (uint16_t i = 0; i < payload; i++)
+        ((uint8_t *)frame)[i] = rx_byte(off + i);
     if (out_len) *out_len = payload;
-    g_capr = (uint16_t)((g_capr + 4 + len + 3) & ~3u);
-    if (g_capr >= 8192) g_capr -= 8192;
-    outw(g_io + 0x38, (uint16_t)(g_capr - 16));
+    g_capr = (uint16_t)((capoff + 4 + len + 3) & ~3u);
+    g_capr = (uint16_t)(g_capr % RX_WRAP);
+    outw(g_io + 0x38, (uint16_t)((g_capr - 16) & 0xffff));
     (void)status;
     return 1;
 }

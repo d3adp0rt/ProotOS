@@ -31,7 +31,7 @@ static int remove_tar(const char *path) {
     return 0;
 }
 
-static int extract_tar(const char *path) {
+static int extract_tar_to(const char *path, const char *prefix) {
     int fd = open(path, 0, 0);
     if (fd < 0) { printf("ppkg: cannot open %s\n", path); return 1; }
     unsigned char h[512];
@@ -46,14 +46,22 @@ static int extract_tar(const char *path) {
         unsigned size = oct((const char *)h + 124);
         char type = (char)h[156];
         if (name[0] == 0) break;
+        char full[288];
+        full[0] = 0;
+        strcat(full, prefix);
+        strcat(full, name);
+        if (prefix[0] && strncmp(name, "packages/", 9) == 0) {
+            char dir[288]; dir[0] = 0; strcat(dir, prefix); strcat(dir, "packages");
+            mkdir(dir, 0755);
+        }
         if (strncmp(name, "usr/", 4) == 0) { mkdir("usr", 0755); mkdir("usr/bin", 0755); }
-        if (strncmp(name, "packages/", 9) == 0) mkdir("packages", 0755);
+        if (strncmp(name, "packages/", 9) == 0 && !prefix[0]) mkdir("packages", 0755);
         if (type == '5') {
-            mkdir(name, 0755);
+            mkdir(full, 0755);
             continue;
         }
-        int out = open(name, 0x242, 0644);
-        if (out < 0) { printf("ppkg: cannot create %s\n", name); return 1; }
+        int out = open(full, 0x242, 0644);
+        if (out < 0) { printf("ppkg: cannot create %s\n", full); return 1; }
         unsigned left = size;
         unsigned char buf[512];
         while (left) {
@@ -70,6 +78,8 @@ static int extract_tar(const char *path) {
     close(fd);
     return 0;
 }
+
+static int extract_tar(const char *path) { return extract_tar_to(path, ""); }
 
 #define REGISTRY "https://github.com/d3adp0rt/prootos-registry"
 
@@ -129,8 +139,7 @@ int main(int argc, char **argv) {
         if (write(fd, bundle, (size_t)n) != n) { close(fd); free(bundle); return 1; }
         close(fd);
         free(bundle);
-        mkdir("/var/lib/ppkg/packages", 0755);
-        if (extract_tar("/var/lib/ppkg/registry.tar") != 0) return 1;
+        if (extract_tar_to("/var/lib/ppkg/registry.tar", "/var/lib/ppkg/") != 0) return 1;
         printf("ppkg: registry updated\n");
         return 0;
     }
