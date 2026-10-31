@@ -13,7 +13,7 @@ static void cat_file(const char *path) {
     close(fd);
 }
 
-static char g_history[8][128];
+static char g_history[8][1024];
 static int g_hist_count;
 
 static int run(char *line) {
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    char line[128];
+    char line[1024];
     int len = 0, prev_len = 0, hist_pos = 0;
     for (;;) {
         printf("proot> ");

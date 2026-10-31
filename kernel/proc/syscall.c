@@ -196,7 +196,7 @@ static long sys_pipe(struct process *p, uint64_t uptr) {
 }
 
 static long sys_execve(struct process *p, uint64_t upath, uint64_t uargv) {
-    char path[64];
+    char path[256];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
         return -14;
     path[sizeof(path) - 1] = 0;
@@ -210,7 +210,7 @@ static long sys_execve(struct process *p, uint64_t upath, uint64_t uargv) {
                 return -14;
             if (!ptr)
                 break;
-            static char args[16][128];
+            static char args[16][512];
             if (user_copy_from(p, args[i], ptr, sizeof(args[i]) - 1) != 0)
                 return -14;
             args[i][sizeof(args[i]) - 1] = 0;

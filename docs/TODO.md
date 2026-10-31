@@ -141,6 +141,13 @@ Executable linking done:
   resulting static ELF runs via the normal loader;
 - demo prints `tcc: standalone executable works` and squares 1..5.
 
+Input/output limits raised:
+
+- shell input lines and history entries are now 1 KiB (was 128 bytes);
+- execve paths up to 255 chars and argv entries up to 511 bytes;
+- the PS/2 keyboard ring buffer is 1 KiB (was 256 bytes);
+- GUI terminal scrollback is 1000 lines (was 300).
+
 Also done:
 
 - terminal ANSI support in the framebuffer console (`CSI H/J/K`);

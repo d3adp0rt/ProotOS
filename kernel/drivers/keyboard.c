@@ -4,7 +4,7 @@
  */
 #include "keyboard.h"
 
-#define KBD_BUF_SIZE 256
+#define KBD_BUF_SIZE 1024
 
 static const char map_lower[128] = {
     0,   27,  '1', '2', '3', '4', '5', '6', '7',  '8', '9', '0',  '-',  '=', '\b', '\t',

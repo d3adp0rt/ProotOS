@@ -14,7 +14,7 @@
 #define TASKBAR_H 38
 #define TERM_COLS 78
 #define TERM_ROWS 30
-#define HIST_ROWS 300
+#define HIST_ROWS 1000
 #define LINE_H 10
 #define MIN_W 260
 #define MIN_H 160
