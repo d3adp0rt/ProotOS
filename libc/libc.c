@@ -289,6 +289,9 @@ void *fb_map(void) {
 int fb_unmap(void) {
     return (int)syscall0(88);
 }
+int console_gui(int on) {
+    return (int)syscall1(89, on);
+}
 int clear_screen(void) { return (int)syscall0(83); }
 
 long net_https_get(const char *host, const char *path, char *buf, size_t cap) {

@@ -31,6 +31,7 @@ static struct {
 } con;
 
 static spinlock_t g_console_lock = SPINLOCK_INIT;
+static int g_fb_output = 1;
 
 static uint32_t pack_color(uint32_t rgb) {
     if (con.format == PROOT_FB_FORMAT_RGB) {
@@ -232,9 +233,11 @@ void console_clear(void) {
     }
 }
 
+void console_set_fb_output(int enabled) { g_fb_output = enabled; }
+
 void console_putc(char c) {
     serial_putc(c);
-    if (con.fb)
+    if (con.fb && g_fb_output)
         fb_putc(c);
     else if (con.vga)
         vga_putc(c);

@@ -50,8 +50,23 @@ static void push(char c) {
 }
 
 void keyboard_feed(uint8_t scancode) {
-    if (scancode == 0xe0 || scancode == 0xe1)
+    if (scancode == 0xe0) {
+        g_extended = 1;
         return;
+    }
+    if (scancode == 0xe1)
+        return;
+    if (g_extended) {
+        g_extended = 0;
+        if (!(scancode & 0x80)) {
+            uint8_t base = scancode & 0x7f;
+            if (base == 0x48) push((char)0x80);      /* up */
+            else if (base == 0x50) push((char)0x81); /* down */
+            else if (base == 0x49) push((char)0x82); /* page up */
+            else if (base == 0x51) push((char)0x83); /* page down */
+        }
+        return;
+    }
     if (scancode == 0x2a || scancode == 0x36) {
         g_shift = 1;
         return;

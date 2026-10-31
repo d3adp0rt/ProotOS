@@ -127,13 +127,27 @@ M10d done:
 - verified with screenshots: resize, second terminal running `df /`, focus
   switching and `ls` in the first terminal; boot test stays green.
 
-Next M10e:
+M10e done:
 
-- damage tracking instead of full-screen redraws;
-- terminal scrollback and better line spacing;
-- per-window backbuffers and resize-aware terminal grids;
-- launcher entries beyond `+ New Terminal`; file manager and text viewer;
-- keyboard focus tied to a widget (terminal vs. buttons).
+- damage tracking: redraws use a clipped bounding box (terminal output, drag,
+  resize, paging); the desktop gradient only iterates the damaged rect;
+- terminal scrollback (300 lines) with PageUp/PageDown; live view keeps the
+  cursor, scrolled views do not;
+- extended PS/2 keys: up/down/page-up/page-down are decoded, so shell history
+  arrows work in GUI terminals;
+- better terminal line spacing (10 px rows);
+- new syscall `console_gui` (89): while the GUI owns the screen, kernel log
+  output goes to serial only, so `[proc]` messages no longer scroll the
+  framebuffer under the desktop;
+- verified by typing `ls` repeatedly, paging back, and dragging a terminal,
+  with screenshots free of ghosts or console scroll damage.
+
+Next M10f:
+
+- per-window backbuffers and resize-aware terminal reflow;
+- file manager / text viewer, more launcher entries;
+- mouse wheel scrolling and terminal selection;
+- widget-level keyboard focus (terminal vs. buttons).
 
 ## ВЕРНУТЬСЯ: остальное
 

@@ -56,6 +56,7 @@ struct mouse_event { int16_t dx, dy; uint8_t buttons, pad; };
 int fb_info(struct fb_info *out);
 void *fb_map(void);
 int fb_unmap(void);
+int console_gui(int on);
 int stat(const char *path, struct stat *st);
 int statfs(const char *path, struct statfs *st);
 int readdir(const char *path, unsigned index, char *name, size_t len);

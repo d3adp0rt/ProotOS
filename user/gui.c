@@ -13,6 +13,8 @@
 #define TASKBAR_H 38
 #define TERM_COLS 78
 #define TERM_ROWS 30
+#define HIST_ROWS 300
+#define LINE_H 10
 #define MIN_W 260
 #define MIN_H 160
 
@@ -25,6 +27,9 @@ enum {
 
 struct term_state {
     char grid[TERM_ROWS][TERM_COLS];
+    char hist[HIST_ROWS][TERM_COLS];
+    int hist_count;
+    int offset;
     int row, col, esc, bytes;
     int in_fd, out_fd, pid;
     int used;
@@ -58,6 +63,12 @@ struct clip {
     int on, x, y, w, h;
 };
 static struct clip g_clip;
+
+struct rect {
+    int x, y, w, h;
+};
+static struct rect g_damage;
+static int g_damage_on;
 
 static uint32_t rgba(uint32_t rgb) {
     if (g_rgb)
@@ -123,6 +134,8 @@ static void term_init(int idx) {
         for (int c = 0; c < TERM_COLS; c++)
             t->grid[r][c] = ' ';
     t->row = t->col = t->esc = t->bytes = 0;
+    t->hist_count = 0;
+    t->offset = 0;
     t->in_fd = t->out_fd = -1;
     t->pid = -1;
     t->used = 1;
@@ -130,6 +143,10 @@ static void term_init(int idx) {
 
 static void term_scroll(int idx) {
     struct term_state *t = &g_terms[idx];
+    int slot = t->hist_count % HIST_ROWS;
+    for (int c = 0; c < TERM_COLS; c++)
+        t->hist[slot][c] = t->grid[0][c];
+    t->hist_count++;
     for (int r = 1; r < TERM_ROWS; r++)
         for (int c = 0; c < TERM_COLS; c++)
             t->grid[r - 1][c] = t->grid[r][c];
@@ -171,27 +188,57 @@ static void term_feed(int idx, const char *buf, int n) {
         term_putc(idx, buf[i]);
 }
 
+static char *term_line(int idx, int line) {
+    struct term_state *t = &g_terms[idx];
+    if (line < 0)
+        return 0;
+    if (line < t->hist_count)
+        return t->hist[line % HIST_ROWS];
+    line -= t->hist_count;
+    if (line < TERM_ROWS)
+        return t->grid[line];
+    return 0;
+}
+
 static void draw_terminal(int idx, int x, int y, int w, int h) {
     struct term_state *t = &g_terms[idx];
     int cx = x + 12, cy = y + 8;
-    for (int r = 0; r < TERM_ROWS && (r * 8) < h - 16; r++) {
+    int rows = (h - 16) / LINE_H;
+    if (rows > TERM_ROWS)
+        rows = TERM_ROWS;
+    if (rows < 1)
+        return;
+    int top = t->hist_count + TERM_ROWS - rows - t->offset;
+    for (int r = 0; r < rows; r++) {
+        char *src = term_line(idx, top + r);
+        if (!src)
+            continue;
         char line[TERM_COLS + 1];
         for (int c = 0; c < TERM_COLS; c++)
-            line[c] = t->grid[r][c];
+            line[c] = src[c];
         line[TERM_COLS] = 0;
-        text(cx, cy + r * 8, line, 0x9becb8, 1);
+        text(cx, cy + r * LINE_H, line, 0x9becb8, 1);
     }
-    if (g_active == idx && t->row < TERM_ROWS)
-        fill(cx + t->col * 8, cy + t->row * 8, 8, 8, 0x9becb8);
+    if (g_active == idx && t->offset == 0 && t->row >= TERM_ROWS - rows) {
+        int dr = t->row - (TERM_ROWS - rows);
+        fill(cx + t->col * 8, cy + dr * LINE_H, 8, 8, 0x9becb8);
+    }
     (void)w;
 }
 
 static void desktop(void) {
-    for (uint32_t y = 0; y < g_info.height; y++) {
-        uint32_t t = y * 255 / g_info.height;
+    int x0 = 0, y0 = 0, x1 = (int)g_info.width, y1 = (int)g_info.height;
+    if (g_clip.on) {
+        x0 = g_clip.x;
+        y0 = g_clip.y;
+        x1 = g_clip.x + g_clip.w;
+        y1 = g_clip.y + g_clip.h;
+    }
+    for (int y = y0; y < y1; y++) {
+        uint32_t t = (uint32_t)y * 255 / g_info.height;
         uint32_t r = 10 + t / 6, g = 18 + t / 3, b = 34 + t / 2;
-        for (uint32_t x = 0; x < g_info.width; x++)
-            put((int)x, (int)y, (r << 16) | (g << 8) | b);
+        for (int x = x0; x < x1; x++)
+            put(x, y, (r << 16) | (g << 8) | b);
     }
 }
 
@@ -285,13 +332,50 @@ static void taskbar(void) {
     text(230 + MAX_WINS * 126 + 10, 15, "+ New Terminal", 0xd1fae5, 1);
 }
 
-static void draw_scene(void) {
-    g_clip.on = 0;
+static void draw_scene_rect(int x, int y, int w, int h) {
+    int x1 = x + w, y1 = y + h;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x1 > (int)g_info.width) x1 = (int)g_info.width;
+    if (y1 > (int)g_info.height) y1 = (int)g_info.height;
+    if (x >= x1 || y >= y1)
+        return;
+    g_clip.on = 1;
+    g_clip.x = x;
+    g_clip.y = y;
+    g_clip.w = x1 - x;
+    g_clip.h = y1 - y;
     desktop();
     taskbar();
     for (int i = 0; i < MAX_WINS; i++)
         if (g_wins[g_order[i]].visible)
             draw_window(g_order[i]);
+    g_clip.on = 0;
+}
+
+static void damage_add(int x, int y, int w, int h) {
+    int x1 = x + w, y1 = y + h;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x1 > (int)g_info.width) x1 = (int)g_info.width;
+    if (y1 > (int)g_info.height) y1 = (int)g_info.height;
+    if (x >= x1 || y >= y1)
+        return;
+    if (!g_damage_on) {
+        g_damage.x = x;
+        g_damage.y = y;
+        g_damage.w = x1 - x;
+        g_damage.h = y1 - y;
+        g_damage_on = 1;
+        return;
+    }
+    int dx1 = g_damage.x + g_damage.w, dy1 = g_damage.y + g_damage.h;
+    if (x < g_damage.x) g_damage.x = x;
+    if (y < g_damage.y) g_damage.y = y;
+    if (x1 > dx1) dx1 = x1;
+    if (y1 > dy1) dy1 = y1;
+    g_damage.w = dx1 - g_damage.x;
+    g_damage.h = dy1 - g_damage.y;
 }
 
 static const unsigned char cursor_bits[18][12] = {
@@ -528,9 +612,10 @@ int main(int argc, char **argv) {
     }
     printf("gui: framebuffer %ux%u %ubpp pitch=%u\n", g_info.width, g_info.height,
            g_info.bpp, g_info.pitch);
+    console_gui(1); /* keep kernel logs off the GUI framebuffer */
 
     spawn_terminal(300, 160, 680, 360);
-    draw_scene();
+    draw_scene_rect(0, 0, (int)g_info.width, (int)g_info.height);
     int fb_ok = get(740, 460) == rgba(0x111827);
 
     int mfd = open("/dev/mouse", 0, 0);
@@ -546,7 +631,7 @@ int main(int argc, char **argv) {
     save_under(cx, cy, under);
     draw_cursor(cx, cy);
 
-    int events = 0, frames = 0, redraw = 0;
+    int events = 0, frames = 0;
     int limit = seconds > 0 ? seconds * 50 : -1;
     int buttons = 0;
 
@@ -568,7 +653,7 @@ int main(int argc, char **argv) {
                 events++;
                 if (buttons && !prev_buttons) {
                     handle_press(cx, cy);
-                    redraw = 1;
+                    damage_add(0, 0, (int)g_info.width, (int)g_info.height);
                 }
                 if (!buttons && prev_buttons) {
                     g_drag = -1;
@@ -576,23 +661,25 @@ int main(int argc, char **argv) {
                 }
                 if (g_drag >= 0 && (ev.dx || ev.dy)) {
                     struct window *w = &g_wins[g_drag];
+                    damage_add(w->x - 8, w->y - 8, w->w + 16, w->h + 16);
                     w->x = cx - g_drag_dx;
                     w->y = cy - g_drag_dy;
                     if (w->x < 0) w->x = 0;
                     if (w->y < TASKBAR_H) w->y = TASKBAR_H;
                     if (w->x + w->w > (int)g_info.width) w->x = (int)g_info.width - w->w;
                     if (w->y + w->h > (int)g_info.height) w->y = (int)g_info.height - w->h;
-                    redraw = 1;
+                    damage_add(w->x - 8, w->y - 8, w->w + 16, w->h + 16);
                 }
                 if (g_resize >= 0 && (ev.dx || ev.dy)) {
                     struct window *w = &g_wins[g_resize];
+                    damage_add(w->x - 8, w->y - 8, w->w + 16, w->h + 16);
                     w->w = cx - w->x + 2;
                     w->h = cy - w->y + 2;
                     if (w->w < MIN_W) w->w = MIN_W;
                     if (w->h < MIN_H) w->h = MIN_H;
                     if (w->x + w->w > (int)g_info.width) w->w = (int)g_info.width - w->x;
                     if (w->y + w->h > (int)g_info.height) w->h = (int)g_info.height - w->y;
-                    redraw = 1;
+                    damage_add(w->x - 8, w->y - 8, w->w + 16, w->h + 16);
                 }
             }
         }
@@ -605,7 +692,8 @@ int main(int argc, char **argv) {
             long tn;
             while ((tn = read(t->out_fd, tb, sizeof(tb))) > 0) {
                 term_feed(i, tb, (int)tn);
-                redraw = 1;
+                damage_add(g_wins[i].x - 8, g_wins[i].y - 8, g_wins[i].w + 16,
+                           g_wins[i].h + 16);
             }
         }
 
@@ -619,19 +707,39 @@ int main(int argc, char **argv) {
                 }
                 if (g_active >= 0 && g_wins[g_active].kind == W_TERM) {
                     struct term_state *t = &g_terms[g_active];
-                    if (t->used && t->in_fd >= 0)
+                    struct window *tw = &g_wins[g_active];
+                    int rows = (tw->h - TITLE_H - 16) / LINE_H;
+                    if (rows > TERM_ROWS) rows = TERM_ROWS;
+                    if (rows < 1) rows = 1;
+                    if ((unsigned char)c == 0x82) {
+                        t->offset += rows;
+                        if (t->offset > t->hist_count) t->offset = t->hist_count;
+                        damage_add(tw->x - 8, tw->y - 8, tw->w + 16, tw->h + 16);
+                        continue;
+                    }
+                    if ((unsigned char)c == 0x83) {
+                        t->offset -= rows;
+                        if (t->offset < 0) t->offset = 0;
+                        damage_add(tw->x - 8, tw->y - 8, tw->w + 16, tw->h + 16);
+                        continue;
+                    }
+                    if (t->used && t->in_fd >= 0) {
+                        t->offset = 0;
                         write(t->in_fd, &c, 1);
+                    }
                 }
             }
         }
         if (quit)
             break;
 
-        if (redraw) {
-            draw_scene();
+        if (g_damage_on) {
+            damage_add(ox, oy, CUR_W, CUR_H);
+            damage_add(cx, cy, CUR_W, CUR_H);
+            draw_scene_rect(g_damage.x, g_damage.y, g_damage.w, g_damage.h);
+            g_damage_on = 0;
             save_under(cx, cy, under);
             draw_cursor(cx, cy);
-            redraw = 0;
         } else if (moved) {
             restore_under(ox, oy, under);
             save_under(cx, cy, under);
@@ -642,6 +750,7 @@ int main(int argc, char **argv) {
     }
 
     restore_under(cx, cy, under);
+    console_gui(0);
     for (int i = 0; i < MAX_WINS; i++)
         if (g_wins[i].kind == W_TERM)
             close_terminal(i);

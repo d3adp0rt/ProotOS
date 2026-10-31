@@ -34,6 +34,7 @@
 #define SYS_FB_INFO 85
 #define SYS_FB_MAP 86
 #define SYS_FB_UNMAP 88
+#define SYS_CONSOLE_GUI 89
 #define SYS_PIPE 22
 #define SYS_DUP2 33
 #define SYS_FCNTL 72
@@ -381,6 +382,10 @@ void syscall_dispatch(struct trap_frame *tf) {
         break;
     case SYS_FB_UNMAP:
         ret = sys_fb_unmap(p);
+        break;
+    case SYS_CONSOLE_GUI:
+        console_set_fb_output(tf->rdi == 0);
+        ret = 0;
         break;
     case SYS_READDIR:
         ret = sys_readdir(p, tf->rdi, (uint32_t)tf->rsi, tf->rdx, tf->r10);
