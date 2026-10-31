@@ -358,6 +358,33 @@ add_custom_command(
     COMMENT "LD [user] /bin/lua"
     VERBATIM)
 
+set(TCC_DIR ${CMAKE_SOURCE_DIR}/third_party/tcc)
+set(TCC_OBJ_DIR ${CMAKE_BINARY_DIR}/tccbuild)
+file(MAKE_DIRECTORY ${TCC_OBJ_DIR})
+set(TCC_SOURCES tcc)
+set(TCC_OBJS)
+foreach(src ${TCC_SOURCES})
+    add_custom_command(
+        OUTPUT ${TCC_OBJ_DIR}/${src}.o
+        COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
+            -fno-pie -fno-stack-protector -O1 -w
+            -I${CMAKE_SOURCE_DIR}/libc/include -I${TCC_DIR}
+            -DTCC_TARGET_X86_64 -DONE_SOURCE=1 -DPROOTOS -DCONFIG_TCCBOOT
+            -DCONFIG_TCC_STATIC -DCONFIG_TCC_ASM
+            -c ${TCC_DIR}/${src}.c -o ${TCC_OBJ_DIR}/${src}.o
+        DEPENDS ${TCC_DIR}/${src}.c ${TCC_DIR}/tcc.h
+        COMMENT "CC [tcc] ${src}.c"
+        VERBATIM)
+    list(APPEND TCC_OBJS ${TCC_OBJ_DIR}/${src}.o)
+endforeach()
+add_custom_command(
+    OUTPUT ${USER_DIR}/bin_tcc
+    COMMAND ${LD_LLD_EXECUTABLE} -Ttext=0x400000 -e _start -o ${USER_DIR}/bin_tcc
+        ${LIBC_OBJS} ${TCC_OBJS}
+    DEPENDS ${LIBC_OBJS} ${TCC_OBJS}
+    COMMENT "LD [user] /bin/tcc"
+    VERBATIM)
+
 set(INITRAMFS_STAGE ${CMAKE_BINARY_DIR}/initramfs-root)
 set(EXT2_IMG ${CMAKE_BINARY_DIR}/ext2.img)
 add_custom_command(
@@ -390,6 +417,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_ppkg ${INITRAMFS_STAGE}/bin/ppkg
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_gui ${INITRAMFS_STAGE}/bin/gui
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_lua ${INITRAMFS_STAGE}/bin/lua
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_tcc ${INITRAMFS_STAGE}/bin/tcc
     COMMAND ${CMAKE_COMMAND} -E make_directory ${INITRAMFS_STAGE}/packages
     COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/mkpkg.py ${USER_DIR}/hello.elf ${INITRAMFS_STAGE}/packages/hello.pk usr/bin/hello
     COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/mkpkg.py ${USER_DIR}/bin_greet ${INITRAMFS_STAGE}/packages/greet.pk usr/bin/greet
@@ -398,7 +426,7 @@ add_custom_command(
             ${USER_DIR}/bin_echo ${USER_DIR}/bin_cat ${USER_DIR}/bin_ls ${USER_DIR}/bin_rm
             ${USER_DIR}/bin_cp ${USER_DIR}/bin_mv ${USER_DIR}/bin_ps ${USER_DIR}/bin_df
             ${USER_DIR}/bin_ping ${USER_DIR}/bin_wget ${USER_DIR}/bin_ppkg ${USER_DIR}/bin_greet
-            ${USER_DIR}/bin_gui ${USER_DIR}/bin_lua
+            ${USER_DIR}/bin_gui ${USER_DIR}/bin_lua ${USER_DIR}/bin_tcc
             ${EXT2_IMG} ${INITRAMFS_FILES}
     COMMENT "STAGE initramfs"
     VERBATIM)

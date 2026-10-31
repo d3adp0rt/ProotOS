@@ -112,6 +112,7 @@ int main(int argc, char **argv) {
     run("ppkg remove hello");
     run("ppkg remove greet");
     run("lua /usr/share/lua/hello.lua");
+    run("tcc -nostdlib -run /usr/share/tcc/hello.c");
     run("gui 10");
     run("clear");
     puts("M8b complete: libc, shell, ls/rm/cp/mv/ps/df.");

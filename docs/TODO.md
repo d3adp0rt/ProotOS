@@ -112,9 +112,26 @@ Lua 5.4 done:
 - kernel FPU context switching via FXSAVE/FXRSTOR, and user/libc builds now
   use SSE; crt0 aligns the stack for the SysV ABI.
 
+TinyCC done (JIT):
+
+- vendored TCC 0.9.27, single-translation-unit build with `CONFIG_TCCBOOT`,
+  `CONFIG_TCC_STATIC` and a PROOTOS JIT mmap path;
+- `/bin/tcc -nostdlib -run file.c` compiles, relocates and runs C in-process;
+- the JIT resolves libc symbols (printf/malloc/strings/math) through TCC's
+  static symbol table;
+- demo `/usr/share/tcc/hello.c` (recursion, loops, doubles/sqrt);
+- kernel syscalls `mmap`/`munmap`/`mprotect` (90–92) for executable JIT pages;
+- libc additions for compilers: variadic `open`, `sscanf`, `qsort`, `fdopen`,
+  `fputc`, `strtof/strtold`, POSIX `struct stat`, `<sys/*>`, `<inttypes.h>`,
+  `<dlfcn.h>`, `<signal.h>` shims, guarded heap free list.
+
+Limitations: JIT only (no executable output yet), no standard headers/libs
+installed in the image, no C++ runtime.
+
 Next:
 
-- C compiler in OS (TinyCC first, then a GCC cross package);
+- install headers + libc objects into the image and teach TCC to link
+  executables (or bring up a GCC cross package);
 - C++ compiler/runtime;
 - Python (MicroPython or a CPython port);
 - `ppkg source` builds using the in-OS toolchain.

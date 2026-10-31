@@ -6,6 +6,11 @@
 #include <errno.h>
 #include <locale.h>
 #include <time.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <sys/time.h>
+#include <dlfcn.h>
+#include <signal.h>
 
 int errno;
 
@@ -54,7 +59,10 @@ long write(int fd, const void *buf, size_t len) {
 long read(int fd, void *buf, size_t len) {
     return syscall3(0, fd, (long)buf, (long)len);
 }
-int open(const char *path, int flags, int mode) {
+int open(const char *path, int flags, ...) {
+    int mode = 0;
+    if (flags & 0x242)
+        mode = 0644;
     return (int)syscall3(6, (long)path, flags, mode);
 }
 int close(int fd) {
@@ -99,7 +107,15 @@ int unlink(const char *path) {
     return (int)syscall1(9, (long)path);
 }
 int stat(const char *path, struct stat *st) {
-    return (int)syscall2(7, (long)path, (long)st);
+    struct { uint64_t size; uint32_t mode; uint32_t type; } k;
+    int r = (int)syscall2(7, (long)path, (long)&k);
+    if (r != 0 || !st)
+        return r;
+    st->st_size = k.size;
+    st->st_type = k.type;
+    st->st_mode = (k.type == 2 ? S_IFDIR : S_IFREG) | (k.mode & 0777);
+    st->st_mtime = 0;
+    return 0;
 }
 int shutdown_os(void) {
     return (int)syscall0(169);
@@ -198,6 +214,11 @@ int fprintf(FILE *f, const char *fmt, ...) {
     return n;
 }
 
+int fputc(int c, FILE *f) {
+    unsigned char ch = (unsigned char)c;
+    return f && write(f->fd, &ch, 1) == 1 ? c : -1;
+}
+
 int fputs(const char *s, FILE *f) {
     if (!f || !s)
         return -1;
@@ -215,6 +236,19 @@ FILE *fopen(const char *path, const char *mode) {
         close(fd);
         return 0;
     }
+    f->fd = fd;
+    f->eof = 0;
+    f->err = 0;
+    return f;
+}
+
+FILE *fdopen(int fd, const char *mode) {
+    (void)mode;
+    if (fd < 0)
+        return 0;
+    FILE *f = malloc(sizeof(*f));
+    if (!f)
+        return 0;
     f->fd = fd;
     f->eof = 0;
     f->err = 0;
@@ -304,6 +338,46 @@ char *fgets(char *s, int n, FILE *f) {
 
 int fflush(FILE *f) { (void)f; return 0; }
 
+int sscanf(const char *s, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int matched = 0;
+    while (*fmt && *s) {
+        if (*fmt == '%') {
+            fmt++;
+            if (*fmt == 'd') {
+                int *out = va_arg(ap, int *);
+                int neg = 0, v = 0, any = 0;
+                while (*s == ' ' || *s == '\t') s++;
+                if (*s == '-') { neg = 1; s++; }
+                while (*s >= '0' && *s <= '9') { v = v * 10 + (*s++ - '0'); any = 1; }
+                if (*out) *out = neg ? -v : v;
+                matched++;
+            } else if (*fmt == 's') {
+                char *out = va_arg(ap, char *);
+                while (*s == ' ' || *s == '\t') s++;
+                while (*s && *s != ' ' && *s != '\t') *out++ = *s++;
+                *out = 0;
+                matched++;
+            } else if (*fmt == 'c') {
+                char *out = va_arg(ap, char *);
+                *out = *s++;
+                matched++;
+            } else {
+                break;
+            }
+            fmt++;
+        } else {
+            if (*fmt != *s)
+                break;
+            fmt++;
+            s++;
+        }
+    }
+    va_end(ap);
+    return matched;
+}
+
 time_t time(time_t *t) {
     if (t)
         *t = 0;
@@ -311,6 +385,32 @@ time_t time(time_t *t) {
 }
 
 clock_t clock(void) { return 0; }
+
+static struct tm g_tm;
+struct tm *localtime(const time_t *t) {
+    (void)t;
+    g_tm.tm_year = 124;
+    g_tm.tm_mon = 0;
+    g_tm.tm_mday = 1;
+    return &g_tm;
+}
+struct tm *gmtime(const time_t *t) { return localtime(t); }
+
+void qsort(void *base, size_t n, size_t size, int (*cmp)(const void *, const void *)) {
+    unsigned char *b = base;
+    unsigned char tmp[128];
+    for (size_t i = 1; i < n; i++) {
+        size_t j = i;
+        while (j > 0 && cmp(b + (j - 1) * size, b + j * size) > 0) {
+            if (size <= sizeof(tmp)) {
+                memcpy(tmp, b + (j - 1) * size, size);
+                memcpy(b + (j - 1) * size, b + j * size, size);
+                memcpy(b + j * size, tmp, size);
+            }
+            j--;
+        }
+    }
+}
 
 int getc(FILE *f) {
     unsigned char c;
@@ -400,8 +500,10 @@ char *strstr(const char *h, const char *n) {
 }
 
 #define HEAP_SIZE (2 * 1024 * 1024)
+#define HEAP_MAGIC 0x48454150u
 struct heap_block {
     size_t size;
+    uint32_t magic;
     int free;
     struct heap_block *next;
 };
@@ -412,6 +514,7 @@ static int g_heap_ready;
 static void heap_init(void) {
     g_heap_head = (struct heap_block *)g_heap;
     g_heap_head->size = HEAP_SIZE - sizeof(struct heap_block);
+    g_heap_head->magic = HEAP_MAGIC;
     g_heap_head->free = 1;
     g_heap_head->next = 0;
     g_heap_ready = 1;
@@ -429,6 +532,7 @@ void *malloc(size_t n) {
         if (b->size >= n + sizeof(struct heap_block) + 32) {
             struct heap_block *nb = (struct heap_block *)((unsigned char *)(b + 1) + n);
             nb->size = b->size - n - sizeof(struct heap_block);
+            nb->magic = HEAP_MAGIC;
             nb->free = 1;
             nb->next = b->next;
             b->next = nb;
@@ -444,6 +548,9 @@ void free(void *p) {
     if (!p)
         return;
     struct heap_block *b = (struct heap_block *)p - 1;
+    if ((unsigned char *)b < g_heap || (unsigned char *)b >= g_heap + HEAP_SIZE ||
+        b->magic != HEAP_MAGIC)
+        return;
     b->free = 1;
     for (struct heap_block *cur = g_heap_head; cur && cur->next;) {
         if (cur->free && cur->next->free) {
@@ -473,6 +580,8 @@ void *realloc(void *p, size_t n) {
         return 0;
     }
     struct heap_block *b = (struct heap_block *)p - 1;
+    if (b->magic != HEAP_MAGIC)
+        return p;
     size_t old = b->size;
     if (old >= n)
         return p;
@@ -633,6 +742,13 @@ double strtod(const char *s, char **end) {
     return neg ? -v : v;
 }
 
+float strtof(const char *s, char **end) { return (float)strtod(s, end); }
+long double strtold(const char *s, char **end) { return (long double)strtod(s, end); }
+
+unsigned long long strtoull(const char *s, char **end, int base) {
+    return (unsigned long long)strtoul(s, end, base);
+}
+
 unsigned long strtoul(const char *s, char **end, int base) {
     const char *p = s;
     while (isspace((unsigned char)*p))
@@ -674,3 +790,40 @@ char *setlocale(int category, const char *locale) {
     (void)category; (void)locale;
     return (char *)"C";
 }
+
+void *mmap(void *addr, size_t len, int prot, int flags, int fd, long off) {
+    (void)addr; (void)flags; (void)fd; (void)off;
+    long r = syscall2(90, (long)len, (long)prot);
+    return r < 0 ? MAP_FAILED : (void *)r;
+}
+
+int munmap(void *addr, size_t len) {
+    return (int)syscall2(91, (long)addr, (long)len);
+}
+
+int mprotect(void *addr, size_t len, int prot) {
+    return (int)syscall3(92, (long)addr, (long)len, (long)prot);
+}
+
+char *getcwd(char *buf, size_t size) {
+    if (buf && size >= 2) { buf[0] = '/'; buf[1] = 0; return buf; }
+    return 0;
+}
+int chdir(const char *path) { (void)path; return 0; }
+int isatty(int fd) { return fd >= 0 && fd <= 2; }
+
+int gettimeofday(struct timeval *tv, void *tz) {
+    (void)tz;
+    if (tv) { tv->tv_sec = 0; tv->tv_usec = 0; }
+    return 0;
+}
+
+void *dlopen(const char *name, int flags) { (void)name; (void)flags; return 0; }
+void *dlsym(void *h, const char *name) { (void)h; (void)name; return 0; }
+int dlclose(void *h) { (void)h; return 0; }
+char *dlerror(void) { return (char *)"no dynamic loader"; }
+sighandler_t signal(int sig, sighandler_t h) { (void)sig; return h; }
+int raise(int sig) { (void)sig; return 0; }
+int remove(const char *path) { return unlink(path); }
+
+int execvp(const char *file, char *const argv[]) { (void)file; (void)argv; return -1; }

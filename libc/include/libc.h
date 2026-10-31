@@ -11,7 +11,7 @@ long syscall4(long n, long a, long b, long c, long d);
 
 long write(int fd, const void *buf, size_t len);
 long read(int fd, void *buf, size_t len);
-int open(const char *path, int flags, int mode);
+int open(const char *path, int flags, ...);
 int close(int fd);
 int fork(void);
 int execve(const char *path, char *const argv[], char *const envp[]);
@@ -49,7 +49,6 @@ int puts(const char *s);
 int putchar(int c);
 int atoi(const char *s);
 
-struct stat { uint64_t size; uint32_t mode; uint32_t type; };
 struct statfs { uint64_t total_blocks; uint64_t free_blocks; uint32_t block_size; };
 struct fb_info { uint32_t width, height, pitch, bpp, format; };
 struct mouse_event { int16_t dx, dy; uint8_t buttons; int8_t wheel; uint16_t pad; };
@@ -57,7 +56,6 @@ int fb_info(struct fb_info *out);
 void *fb_map(void);
 int fb_unmap(void);
 int console_gui(int on);
-int stat(const char *path, struct stat *st);
 int statfs(const char *path, struct statfs *st);
 int readdir(const char *path, unsigned index, char *name, size_t len);
 long getprocs(char *buf, size_t len);

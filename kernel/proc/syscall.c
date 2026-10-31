@@ -35,6 +35,9 @@
 #define SYS_FB_MAP 86
 #define SYS_FB_UNMAP 88
 #define SYS_CONSOLE_GUI 89
+#define SYS_MMAP 90
+#define SYS_MUNMAP 91
+#define SYS_MPROTECT 92
 #define SYS_PIPE 22
 #define SYS_DUP2 33
 #define SYS_FCNTL 72
@@ -136,6 +139,47 @@ static long sys_fb_unmap(struct process *p) {
         uint64_t va = FB_USER_BASE + off;
         if (vmm_is_mapped_pml4(p->pml4_phys, va))
             vmm_unmap_pml4(p->pml4_phys, va);
+    }
+    return 0;
+}
+
+#define MMAP_BASE 0x40000000ULL
+static uint64_t g_mmap_next = MMAP_BASE;
+
+static long sys_mmap(struct process *p, uint64_t len, uint64_t prot) {
+    if (!len)
+        return -1;
+    uint64_t pages = (len + PAGE_SIZE - 1) >> PAGE_SHIFT;
+    uint64_t size = pages * PAGE_SIZE;
+    uint64_t va = (g_mmap_next + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    if (va + size >= USER_LIMIT)
+        return -1;
+    uint64_t phys = pmm_alloc_pages(pages, PMM_ZONE_ANY);
+    if (!phys)
+        return -1;
+    memset(PHYS_TO_VIRT(phys), 0, size);
+    uint64_t flags = PTE_PRESENT | PTE_USER | PTE_WRITE;
+    if (!(prot & 4))
+        flags |= PTE_NX;
+    for (uint64_t i = 0; i < pages; i++) {
+        if (vmm_map_pml4(p->pml4_phys, va + i * PAGE_SIZE, phys + i * PAGE_SIZE, flags) != 0) {
+            pmm_free_pages(phys, pages);
+            return -1;
+        }
+    }
+    g_mmap_next = va + size;
+    return (long)va;
+}
+
+static long sys_munmap(struct process *p, uint64_t addr, uint64_t len) {
+    if (!addr || (addr & (PAGE_SIZE - 1)))
+        return -1;
+    uint64_t pages = (len + PAGE_SIZE - 1) >> PAGE_SHIFT;
+    for (uint64_t i = 0; i < pages; i++) {
+        uint64_t va = addr + i * PAGE_SIZE;
+        uint64_t phys = vmm_get_phys_pml4(p->pml4_phys, va);
+        if (vmm_unmap_pml4(p->pml4_phys, va) == 0 && phys)
+            pmm_free_pages(phys & ~(PAGE_SIZE - 1), 1);
     }
     return 0;
 }
@@ -382,6 +426,15 @@ void syscall_dispatch(struct trap_frame *tf) {
         break;
     case SYS_FB_UNMAP:
         ret = sys_fb_unmap(p);
+        break;
+    case SYS_MMAP:
+        ret = sys_mmap(p, tf->rdi, tf->rsi);
+        break;
+    case SYS_MUNMAP:
+        ret = sys_munmap(p, tf->rdi, tf->rsi);
+        break;
+    case SYS_MPROTECT:
+        ret = 0;
         break;
     case SYS_CONSOLE_GUI:
         console_set_fb_output(tf->rdi == 0);

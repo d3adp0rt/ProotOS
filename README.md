@@ -22,8 +22,10 @@ a file manager with keyboard navigation, directory browsing and text preview;
 and a text editor with word wrap, undo and Ctrl+S save. Input is a PS/2 IntelliMouse
 (buttons, wheel, Ctrl combos). Syscalls 33/72/85/86/88/89, `/dev/mouse`.
 
-Languages: Lua 5.4 is ported and runs from `/bin/lua` (base/table/string/math/
-utf8/coroutine/debug libraries; io/os/package disabled). The libc now has a
+Languages: Lua 5.4 runs from `/bin/lua` (base/table/string/math/utf8/
+coroutine/debug; io/os/package disabled), and TinyCC 0.9.27 runs from
+`/bin/tcc`: `tcc -nostdlib -run file.c` compiles C to memory and executes it
+against the in-kernel libc (printf, malloc, strings, math). The libc now has a
 free-list allocator, realloc/calloc, stdio-style files, floating-point
 printf/strtod, setjmp/longjmp and a small libm; user threads get FXSAVE/FXRSTOR
 context switching.
