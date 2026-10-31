@@ -58,20 +58,25 @@ Still open:
 ## ВЕРНУТЬСЯ: remote ppkg
 
 Repos created: `prootos-registry`, `prootos-packages`, `prootos-pkg-hello`.
-`ppkg update` now downloads `registry.tar` over HTTPS and extracts it into
+`ppkg update` downloads `registry.tar` over HTTPS and extracts it into
 `/var/lib/ppkg/`, so the index and package payload really come from the remote
-registry. The shell demo runs `ppkg update`, `ppkg list`, `ppkg install hello`,
-runs it, then `ppkg remove hello`.
+registry. The shell demo runs `ppkg update`, `ppkg list`, `ppkg install hello`
+(which pulls the `greet` dependency first), runs both programs, then removes
+them.
+
+`ppkg install` now resolves dependencies recursively from the index
+(comma-separated `deps` field, depth and cycle limits). `ppkg remove` removes
+only the named package; dependency-aware removal is still open.
 
 Still open:
-- recursive dependency resolution (dependency fields are parsed and displayed);
+- dependency-aware removal and version constraints;
 - source builds (stub: no compiler inside the OS);
 - signed registry metadata (TLS verification is now in place; package
   signatures are still missing).
 
 ## ВЕРНУТЬСЯ: остальное
 
-- Remote ppkg recursive dependencies + source builds.
+- Remote ppkg version constraints + source builds.
 - TLS certificate verification / CA store / TLS 1.3.
 - NVMe, USB xHCI/HID/storage, AC'97 audio.
 - COW fork, full signals/ptrace, `syscall/sysret`.

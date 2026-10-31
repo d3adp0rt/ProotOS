@@ -286,7 +286,7 @@ char *strstr(const char *h, const char *n) {
     return 0;
 }
 
-static unsigned char g_heap[131072];
+static unsigned char g_heap[262144];
 static size_t g_heap_used;
 void *malloc(size_t n) {
     n = (n + 15) & ~(size_t)15;

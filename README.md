@@ -8,7 +8,8 @@ ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
 `cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
 Packages: `/bin/ppkg` downloads the registry over HTTPS and installs/removes
-tar-based `.pk` packages (`update`, `list`, `search`, `install`, `remove`).
+tar-based `.pk` packages (`update`, `list`, `search`, `install`, `remove`),
+resolving dependencies recursively (demo installs `hello`, which pulls `greet`).
 TLS: mbedTLS 2.28 client, TLS 1.2, multiple HTTPS sessions per boot,
 certificate and hostname verification against a Mozilla CA bundle.
 Disk: AHCI SATA (`/dev/sda`) with virtio-blk fallback.
@@ -22,6 +23,7 @@ Package repositories:
 - https://github.com/d3adp0rt/prootos-registry
 - https://github.com/d3adp0rt/prootos-packages
 - https://github.com/d3adp0rt/prootos-pkg-hello
+- https://github.com/d3adp0rt/prootos-pkg-greet
 
 ![status](https://img.shields.io/badge/status-M9d-blue)
 

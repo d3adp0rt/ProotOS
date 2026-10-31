@@ -1,1 +1,2 @@
-hello 1.0 - /packages/hello.pk
+greet 1.0 - /packages/greet.pk
+hello 1.0 greet /packages/hello.pk

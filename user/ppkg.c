@@ -83,8 +83,58 @@ static int extract_tar(const char *path) { return extract_tar_to(path, ""); }
 
 #define REGISTRY "https://github.com/d3adp0rt/prootos-registry"
 
-static int find_pkg(const char *want, char *path, size_t cap) {
+static int find_pkg(const char *want, char *path, size_t cap, char *deps, size_t dcap);
+
+#define MAX_INSTALL_DEPTH 8
+#define MAX_TRACKED 32
+static char g_installed[MAX_TRACKED][32];
+static int g_installed_count;
+
+static int already_installed(const char *name) {
+    for (int i = 0; i < g_installed_count; i++)
+        if (strcmp(g_installed[i], name) == 0) return 1;
+    return 0;
+}
+
+static void mark_installed(const char *name) {
+    if (g_installed_count >= MAX_TRACKED) return;
+    size_t n = 0;
+    while (name[n] && n < 31) { g_installed[g_installed_count][n] = name[n]; n++; }
+    g_installed[g_installed_count][n] = 0;
+    g_installed_count++;
+}
+
+static int install_tree(const char *name, int depth) {
+    if (depth > MAX_INSTALL_DEPTH) { printf("ppkg: dependency too deep at %s\n", name); return 1; }
+    if (already_installed(name)) return 0;
+    char path[256], deps[128];
+    if (!find_pkg(name, path, sizeof(path), deps, sizeof(deps))) {
+        printf("ppkg: unknown package %s\n", name);
+        return 1;
+    }
+    mark_installed(name);
+    if (deps[0] && strcmp(deps, "-") != 0) {
+        char one[64];
+        const char *p = deps;
+        while (*p) {
+            size_t n = 0;
+            while (*p && *p != ',' && n < sizeof(one) - 1) one[n++] = *p++;
+            one[n] = 0;
+            if (*p == ',') p++;
+            if (!one[0]) continue;
+            if (install_tree(one, depth + 1) != 0) return 1;
+        }
+    }
+    printf("ppkg: installing %s from %s\n", name, path);
+    if (extract_tar(path) != 0) return 1;
+    printf("ppkg: installed %s\n", name);
+    return 0;
+}
+
+static int find_pkg(const char *want, char *path, size_t cap, char *deps, size_t dcap) {
     (void)cap;
+    (void)dcap;
+    if (deps && dcap) deps[0] = 0;
     int fd = open("/var/lib/ppkg/index", 0, 0);
     if (fd < 0) return 0;
     char line[256];
@@ -97,10 +147,19 @@ static int find_pkg(const char *want, char *path, size_t cap) {
             if (*sp1) *sp1++ = 0;
             char *ver = sp1; char *sp2 = ver; while (*sp2 && *sp2 != ' ') sp2++;
             if (*sp2) *sp2++ = 0;
-            char *deps = sp2; char *sp3 = deps; while (*sp3 && *sp3 != ' ') sp3++;
+            char *dlist = sp2; char *sp3 = dlist; while (*sp3 && *sp3 != ' ') sp3++;
             if (*sp3) *sp3++ = 0;
-            (void)ver; (void)deps;
-            if (strcmp(name, want) == 0) { strcpy(path, sp3); close(fd); return 1; }
+            (void)ver;
+            if (strcmp(name, want) == 0) {
+                strcpy(path, sp3);
+                if (deps && dcap) {
+                    size_t dl = 0;
+                    while (dlist[dl] && dl + 1 < dcap) { deps[dl] = dlist[dl]; dl++; }
+                    deps[dl] = 0;
+                }
+                close(fd);
+                return 1;
+            }
             n = 0;
         } else if (n < (int)sizeof(line) - 1) n++;
     }
@@ -127,12 +186,12 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[1], "update") == 0) {
         printf("ppkg: updating from %s\n", REGISTRY);
-        char *bundle = malloc(32768);
+        char *bundle = malloc(131072);
         if (!bundle) return 1;
         int n = -1;
         for (int attempt = 0; attempt < 5 && n <= 0; attempt++)
             n = net_https_get("raw.githubusercontent.com",
-                              "/d3adp0rt/prootos-registry/main/registry.tar", bundle, 32768);
+                              "/d3adp0rt/prootos-registry/main/registry.tar", bundle, 131072);
         if (n <= 0) { printf("ppkg: update failed (%d)\n", n); free(bundle); return 1; }
         int fd = open("/var/lib/ppkg/registry.tar", 0x242, 0644);
         if (fd < 0) { free(bundle); return 1; }
@@ -154,17 +213,15 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[1], "install") == 0) {
         if (argc < 3) { printf("ppkg: install NAME\n"); return 1; }
-        char path[256];
-        if (!find_pkg(argv[2], path, sizeof(path))) { printf("ppkg: unknown package %s\n", argv[2]); return 1; }
-        printf("ppkg: installing %s from %s\n", argv[2], path);
-        if (extract_tar(path) != 0) return 1;
-        printf("ppkg: installed %s\n", argv[2]);
-        return 0;
+        return install_tree(argv[2], 0);
     }
     if (strcmp(argv[1], "remove") == 0) {
         if (argc < 3) { printf("ppkg: remove NAME\n"); return 1; }
-        char path[256];
-        if (!find_pkg(argv[2], path, sizeof(path))) { printf("ppkg: unknown package %s\n", argv[2]); return 1; }
+        char path[256], deps[128];
+        if (!find_pkg(argv[2], path, sizeof(path), deps, sizeof(deps))) {
+            printf("ppkg: unknown package %s\n", argv[2]);
+            return 1;
+        }
         if (remove_tar(path) != 0) return 1;
         printf("ppkg: removed %s\n", argv[2]);
         return 0;

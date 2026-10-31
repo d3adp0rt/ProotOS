@@ -107,8 +107,10 @@ int main(int argc, char **argv) {
     run("ppkg update");
     run("ppkg list");
     run("ppkg install hello");
+    run("/usr/bin/greet");
     run("/usr/bin/hello");
     run("ppkg remove hello");
+    run("ppkg remove greet");
     puts("M8b complete: libc, shell, ls/rm/cp/mv/ps/df.");
 
     int kbd = open("/dev/kbd", 0, 0);
