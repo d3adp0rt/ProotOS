@@ -69,6 +69,7 @@ def main() -> int:
         "tcc: fib(12) = 144",
         "tcc: sqrt(2) = 1.41421",
         "MicroPython on ProotOS",
+        "import mathutil: fact(6) = 720",
         "fib: [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144]",
         "sum 1..100 = 5050",
         "gui: terminal shell PASS",

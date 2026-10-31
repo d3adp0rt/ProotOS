@@ -9,3 +9,6 @@ print("pi ~ %.5f" % 3.14159265)
 d = {"prootos": "os", "python": "micropython"}
 print("dict:", sorted(d.items()))
 print("words:", "one two three".split())
+import mathutil
+print("import mathutil: fact(6) =", mathutil.fact(6))
+print("module fib:", mathutil.fib(10))

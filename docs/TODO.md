@@ -142,7 +142,10 @@ MicroPython done:
   libc, GC heap 256 KB, floats enabled, BASIC ROM level;
 - `/bin/micropython script.py` executes a file; no-argument mode starts the
   friendly REPL (stdin, or `/dev/kbd` when launched from the console);
-- `open()` is a stub (no VFS module), external imports disabled;
+- external imports work: `mp_import_stat`/`mp_lexer_new_from_file` read
+  `.py` files through the VFS; sys.path includes `/usr/share/python` and
+  `/lib` (`import mathutil` demo);
+- `open()` and write support are still stubbed;
 - demo `/usr/share/python/hello.py`: recursion, comprehensions, dicts,
   `sorted`, `%` formatting;
 - libc additions for Python: alloca, float classification (`isnan/isinf/

@@ -26,7 +26,8 @@ Languages: Lua 5.4 (`/bin/lua`), TinyCC 0.9.27 (`/bin/tcc -nostdlib -run
 file.c`, with `/usr/include` and the in-kernel libc), and MicroPython 1.24
 (`/bin/micropython script.py` or a REPL) all run in user space. Python uses
 the minimal port with GC, floats, dicts, comprehensions, sorted and string
-formatting; modules/filesystem imports are disabled. The libc now has a
+formatting; it imports `.py` modules from `/usr/share/python` and `/lib`
+through the VFS (`import mathutil` works). The libc now has a
 free-list allocator, realloc/calloc, stdio-style files, floating-point
 printf/strtod, setjmp/longjmp and a small libm; user threads get FXSAVE/FXRSTOR
 context switching.

@@ -3,6 +3,8 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 
 #include "py/builtin.h"
 #include "py/obj.h"
@@ -67,6 +69,8 @@ int main(int argc, char **argv) {
     gc_init(heap, heap + sizeof(heap));
     #endif
     mp_init();
+    mp_obj_list_append(mp_sys_path, mp_obj_new_str("/usr/share/python", 17));
+    mp_obj_list_append(mp_sys_path, mp_obj_new_str("/lib", 4));
     if (argc > 1) {
         int r = run_file(argv[1]);
         mp_deinit();
@@ -106,11 +110,33 @@ void gc_collect(void) {
 #endif
 
 mp_lexer_t *mp_lexer_new_from_file(qstr filename) {
-    mp_raise_OSError(MP_ENOENT);
+    const char *path = qstr_str(filename);
+    int fd = open(path, 0, 0);
+    if (fd < 0)
+        mp_raise_OSError(MP_ENOENT);
+    size_t cap = 16384;
+    char *buf = malloc(cap);
+    if (!buf) {
+        close(fd);
+        mp_raise_OSError(MP_ENOMEM);
+    }
+    long n = read(fd, buf, cap - 1);
+    close(fd);
+    if (n < 0) {
+        free(buf);
+        mp_raise_OSError(MP_EIO);
+    }
+    buf[n] = 0;
+    return mp_lexer_new_from_str_len(filename, buf, (size_t)n, 0);
 }
 
 mp_import_stat_t mp_import_stat(const char *path) {
-    return MP_IMPORT_STAT_NO_EXIST;
+    struct stat st;
+    if (stat(path, &st) != 0)
+        return MP_IMPORT_STAT_NO_EXIST;
+    if (S_ISDIR(st.st_mode))
+        return MP_IMPORT_STAT_DIR;
+    return MP_IMPORT_STAT_FILE;
 }
 
 void nlr_jump_fail(void *val) {
