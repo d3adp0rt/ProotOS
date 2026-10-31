@@ -171,6 +171,9 @@ MicroPython done:
   `.py` files through the VFS; sys.path includes `/usr/share/python` and
   `/lib` (`import mathutil` demo);
 - `open()` and write support are still stubbed;
+- libc heap is growable: 4 MiB static plus up to 32 MiB total via anonymous
+  mmap chunks (up to ~16 MiB per single allocation); a 12 MiB malloc test
+  lives at `/usr/share/tcc/big.c`;
 - demo `/usr/share/python/hello.py`: recursion, comprehensions, dicts,
   `sorted`, `%` formatting;
 - libc additions for Python: alloca, float classification (`isnan/isinf/

@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 
-FAT_SIZE_MB = 16
+FAT_SIZE_MB = 32
 
 
 def run(cmd):

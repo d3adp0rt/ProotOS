@@ -511,24 +511,81 @@ char *strstr(const char *h, const char *n) {
 }
 
 #define HEAP_SIZE (4 * 1024 * 1024)
+#define HEAP_CHUNK (4 * 1024 * 1024)
+#define HEAP_MAX (32 * 1024 * 1024)
 #define HEAP_MAGIC 0x48454150u
+#define MAX_CHUNKS 16
 struct heap_block {
     size_t size;
     uint32_t magic;
     int free;
+    int last;
     struct heap_block *next;
+};
+struct heap_chunk {
+    unsigned char *start;
+    size_t size;
 };
 static unsigned char g_heap[HEAP_SIZE] __attribute__((aligned(16)));
 static struct heap_block *g_heap_head;
+static struct heap_block *g_heap_tail;
+static struct heap_chunk g_chunks[MAX_CHUNKS];
+static int g_nchunks;
+static size_t g_heap_total;
 static int g_heap_ready;
+
+static void chunk_register(unsigned char *start, size_t size) {
+    if (g_nchunks < MAX_CHUNKS) {
+        g_chunks[g_nchunks].start = start;
+        g_chunks[g_nchunks].size = size;
+        g_nchunks++;
+    }
+    g_heap_total += size;
+}
 
 static void heap_init(void) {
     g_heap_head = (struct heap_block *)g_heap;
     g_heap_head->size = HEAP_SIZE - sizeof(struct heap_block);
     g_heap_head->magic = HEAP_MAGIC;
     g_heap_head->free = 1;
+    g_heap_head->last = 1;
     g_heap_head->next = 0;
+    g_heap_tail = g_heap_head;
+    g_nchunks = 0;
+    g_heap_total = 0;
+    chunk_register(g_heap, HEAP_SIZE);
     g_heap_ready = 1;
+}
+
+static int heap_grow(size_t need) {
+    size_t chunk = HEAP_CHUNK;
+    if (need + sizeof(struct heap_block) + 64 > chunk)
+        chunk = (need + sizeof(struct heap_block) + 64 + 4095) & ~(size_t)4095;
+    if (g_heap_total + chunk > HEAP_MAX)
+        return -1;
+    void *p = mmap(0, chunk, 1 /*PROT_READ*/, 0x22 /*MAP_PRIVATE|MAP_ANONYMOUS*/, -1, 0);
+    if (p == (void *)-1)
+        return -1;
+    unsigned char *start = p;
+    struct heap_block *b = (struct heap_block *)start;
+    b->size = chunk - sizeof(struct heap_block);
+    b->magic = HEAP_MAGIC;
+    b->free = 1;
+    b->last = 1;
+    b->next = 0;
+    g_heap_tail->next = b;
+    g_heap_tail = b;
+    chunk_register(start, chunk);
+    return 0;
+}
+
+static int heap_owns(const struct heap_block *b) {
+    const unsigned char *p = (const unsigned char *)b;
+    for (int i = 0; i < g_nchunks; i++) {
+        if (p >= g_chunks[i].start && p < g_chunks[i].start + g_chunks[i].size)
+            return 1;
+    }
+    return 0;
 }
 
 void *malloc(size_t n) {
@@ -537,35 +594,41 @@ void *malloc(size_t n) {
     if (!n)
         n = 1;
     n = (n + 15) & ~(size_t)15;
-    for (struct heap_block *b = g_heap_head; b; b = b->next) {
-        if (!b->free || b->size < n)
-            continue;
-        if (b->size >= n + sizeof(struct heap_block) + 32) {
-            struct heap_block *nb = (struct heap_block *)((unsigned char *)(b + 1) + n);
-            nb->size = b->size - n - sizeof(struct heap_block);
-            nb->magic = HEAP_MAGIC;
-            nb->free = 1;
-            nb->next = b->next;
-            b->next = nb;
-            b->size = n;
+    for (;;) {
+        for (struct heap_block *b = g_heap_head; b; b = b->next) {
+            if (!b->free || b->size < n)
+                continue;
+            if (b->size >= n + sizeof(struct heap_block) + 32) {
+                struct heap_block *nb =
+                    (struct heap_block *)((unsigned char *)(b + 1) + n);
+                nb->size = b->size - n - sizeof(struct heap_block);
+                nb->magic = HEAP_MAGIC;
+                nb->free = 1;
+                nb->last = b->last;
+                nb->next = b->next;
+                b->next = nb;
+                b->last = 0;
+                b->size = n;
+            }
+            b->free = 0;
+            return b + 1;
         }
-        b->free = 0;
-        return b + 1;
+        if (heap_grow(n) != 0)
+            return 0;
     }
-    return 0;
 }
 
 void free(void *p) {
     if (!p)
         return;
     struct heap_block *b = (struct heap_block *)p - 1;
-    if ((unsigned char *)b < g_heap || (unsigned char *)b >= g_heap + HEAP_SIZE ||
-        b->magic != HEAP_MAGIC)
+    if (!g_heap_ready || !heap_owns(b) || b->magic != HEAP_MAGIC)
         return;
     b->free = 1;
     for (struct heap_block *cur = g_heap_head; cur && cur->next;) {
-        if (cur->free && cur->next->free) {
+        if (cur->free && cur->next->free && !cur->last) {
             cur->size += sizeof(struct heap_block) + cur->next->size;
+            cur->last = cur->next->last;
             cur->next = cur->next->next;
         } else {
             cur = cur->next;
