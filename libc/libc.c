@@ -286,6 +286,9 @@ int fb_info(struct fb_info *out) {
 void *fb_map(void) {
     return (void *)syscall0(86);
 }
+int fb_unmap(void) {
+    return (int)syscall0(88);
+}
 int clear_screen(void) { return (int)syscall0(83); }
 
 long net_https_get(const char *host, const char *path, char *buf, size_t cap) {

@@ -1,23 +1,40 @@
 /*
- * ProotOS — M10b userspace window manager demo.
+ * ProotOS — M10d userspace window manager.
  *
  * Maps the GOP framebuffer through SYS_FB_MAP, draws overlapping windows,
- * handles PS/2 mouse clicks, focus, z-order and title-bar dragging.
- * Usage: gui [seconds]   (default: run until ESC)
+ * handles PS/2 mouse clicks, focus, z-order, dragging and resizing, and runs
+ * shell terminals over pipes. Usage: gui [seconds] (default: until ESC).
  */
 #include "libc.h"
 #include "../third_party/fonts/font8x8_basic.h"
 
-#define MAX_WINS 4
-#define TERM_COLS 78
-#define TERM_ROWS 30
+#define MAX_WINS 6
 #define TITLE_H 34
 #define TASKBAR_H 38
+#define TERM_COLS 78
+#define TERM_ROWS 30
+#define MIN_W 260
+#define MIN_H 160
+
+enum {
+    W_DESK = 0,
+    W_SYSTEM,
+    W_NOTES,
+    W_TERM,
+};
+
+struct term_state {
+    char grid[TERM_ROWS][TERM_COLS];
+    int row, col, esc, bytes;
+    int in_fd, out_fd, pid;
+    int used;
+};
 
 struct window {
     int x, y, w, h;
     const char *title;
     int visible;
+    int kind;
 };
 
 static uint32_t *g_fb;
@@ -25,21 +42,22 @@ static struct fb_info g_info;
 static int g_rgb;
 
 static struct window g_wins[MAX_WINS] = {
-    {140, 110, 560, 320, "ProotOS Desktop", 1},
-    {420, 300, 400, 220, "System", 1},
-    {900, 120, 300, 200, "Notes", 1},
-    {300, 160, 680, 360, "Terminal", 1},
+    {140, 110, 560, 320, "ProotOS Desktop", 1, W_DESK},
+    {420, 300, 400, 220, "System", 1, W_SYSTEM},
+    {900, 120, 300, 200, "Notes", 1, W_NOTES},
+    {300, 160, 680, 360, "Terminal", 0, W_TERM},
+    {300, 160, 680, 360, "Terminal", 0, W_TERM},
+    {300, 160, 680, 360, "Terminal", 0, W_TERM},
 };
-static int g_order[MAX_WINS] = {0, 1, 2, 3}; /* bottom .. top */
-static int g_active = 3;
+static int g_order[MAX_WINS] = {0, 1, 2, 3, 4, 5};
+static int g_active = 2;
+static struct term_state g_terms[MAX_WINS];
+static int g_term_total;
 
-/* Terminal window (index 3) runs /bin/sh over two pipes. */
-static char g_term[TERM_ROWS][TERM_COLS];
-static int g_term_row, g_term_col;
-static int g_term_in = -1;   /* write end -> shell stdin */
-static int g_term_out = -1;  /* read end  <- shell stdout/stderr */
-static int g_term_esc;
-static int g_term_bytes;
+struct clip {
+    int on, x, y, w, h;
+};
+static struct clip g_clip;
 
 static uint32_t rgba(uint32_t rgb) {
     if (g_rgb)
@@ -50,6 +68,9 @@ static uint32_t rgba(uint32_t rgb) {
 static void put(int x, int y, uint32_t rgb) {
     if (x < 0 || y < 0 || (uint32_t)x >= g_info.width || (uint32_t)y >= g_info.height)
         return;
+    if (g_clip.on && (x < g_clip.x || y < g_clip.y || x >= g_clip.x + g_clip.w ||
+                      y >= g_clip.y + g_clip.h))
+        return;
     g_fb[(uint64_t)y * (g_info.pitch / 4) + (uint32_t)x] = rgba(rgb);
 }
 
@@ -58,9 +79,20 @@ static uint32_t get(int x, int y) {
 }
 
 static void fill(int x, int y, int w, int h, uint32_t rgb) {
-    for (int j = 0; j < h; j++)
-        for (int i = 0; i < w; i++)
-            put(x + i, y + j, rgb);
+    int x0 = x, y0 = y, x1 = x + w, y1 = y + h;
+    if (g_clip.on) {
+        if (x0 < g_clip.x) x0 = g_clip.x;
+        if (y0 < g_clip.y) y0 = g_clip.y;
+        if (x1 > g_clip.x + g_clip.w) x1 = g_clip.x + g_clip.w;
+        if (y1 > g_clip.y + g_clip.h) y1 = g_clip.y + g_clip.h;
+    }
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > (int)g_info.width) x1 = (int)g_info.width;
+    if (y1 > (int)g_info.height) y1 = (int)g_info.height;
+    for (int j = y0; j < y1; j++)
+        for (int i = x0; i < x1; i++)
+            g_fb[(uint64_t)j * (g_info.pitch / 4) + (uint32_t)i] = rgba(rgb);
 }
 
 static void frame(int x, int y, int w, int h, uint32_t rgb) {
@@ -85,6 +117,75 @@ static void text(int x, int y, const char *s, uint32_t rgb, int scale) {
     }
 }
 
+static void term_init(int idx) {
+    struct term_state *t = &g_terms[idx];
+    for (int r = 0; r < TERM_ROWS; r++)
+        for (int c = 0; c < TERM_COLS; c++)
+            t->grid[r][c] = ' ';
+    t->row = t->col = t->esc = t->bytes = 0;
+    t->in_fd = t->out_fd = -1;
+    t->pid = -1;
+    t->used = 1;
+}
+
+static void term_scroll(int idx) {
+    struct term_state *t = &g_terms[idx];
+    for (int r = 1; r < TERM_ROWS; r++)
+        for (int c = 0; c < TERM_COLS; c++)
+            t->grid[r - 1][c] = t->grid[r][c];
+    for (int c = 0; c < TERM_COLS; c++)
+        t->grid[TERM_ROWS - 1][c] = ' ';
+    t->row = TERM_ROWS - 1;
+}
+
+static void term_newline(int idx) {
+    struct term_state *t = &g_terms[idx];
+    t->col = 0;
+    t->row++;
+    if (t->row >= TERM_ROWS)
+        term_scroll(idx);
+}
+
+static void term_putc(int idx, char ch) {
+    struct term_state *t = &g_terms[idx];
+    if (t->esc) {
+        if (t->esc == 1 && ch == '[') { t->esc = 2; return; }
+        t->esc = 0;
+        return;
+    }
+    if (ch == 27) { t->esc = 1; return; }
+    if (ch == '\n') { term_newline(idx); return; }
+    if (ch == '\r') { t->col = 0; return; }
+    if (ch == '\b') { if (t->col > 0) t->col--; return; }
+    if ((unsigned char)ch < 32) return;
+    if (t->col >= TERM_COLS)
+        term_newline(idx);
+    t->grid[t->row][t->col++] = ch;
+}
+
+static void term_feed(int idx, const char *buf, int n) {
+    struct term_state *t = &g_terms[idx];
+    t->bytes += n;
+    g_term_total += n;
+    for (int i = 0; i < n; i++)
+        term_putc(idx, buf[i]);
+}
+
+static void draw_terminal(int idx, int x, int y, int w, int h) {
+    struct term_state *t = &g_terms[idx];
+    int cx = x + 12, cy = y + 8;
+    for (int r = 0; r < TERM_ROWS && (r * 8) < h - 16; r++) {
+        char line[TERM_COLS + 1];
+        for (int c = 0; c < TERM_COLS; c++)
+            line[c] = t->grid[r][c];
+        line[TERM_COLS] = 0;
+        text(cx, cy + r * 8, line, 0x9becb8, 1);
+    }
+    if (g_active == idx && t->row < TERM_ROWS)
+        fill(cx + t->col * 8, cy + t->row * 8, 8, 8, 0x9becb8);
+    (void)w;
+}
+
 static void desktop(void) {
     for (uint32_t y = 0; y < g_info.height; y++) {
         uint32_t t = y * 255 / g_info.height;
@@ -94,104 +195,58 @@ static void desktop(void) {
     }
 }
 
-static void term_scroll(void) {
-    for (int r = 1; r < TERM_ROWS; r++)
-        for (int c = 0; c < TERM_COLS; c++)
-            g_term[r - 1][c] = g_term[r][c];
-    for (int c = 0; c < TERM_COLS; c++)
-        g_term[TERM_ROWS - 1][c] = ' ';
-    g_term_row = TERM_ROWS - 1;
-}
-
-static void term_newline(void) {
-    g_term_col = 0;
-    g_term_row++;
-    if (g_term_row >= TERM_ROWS)
-        term_scroll();
-}
-
-static void term_putc(char ch) {
-    if (g_term_esc) {
-        if (g_term_esc == 1 && ch == '[') { g_term_esc = 2; return; }
-        g_term_esc = 0;
-        return;
-    }
-    if (ch == 27) { g_term_esc = 1; return; }
-    if (ch == '\n') { term_newline(); return; }
-    if (ch == '\r') { g_term_col = 0; return; }
-    if (ch == '\b') { if (g_term_col > 0) g_term_col--; return; }
-    if ((unsigned char)ch < 32) return;
-    if (g_term_col >= TERM_COLS)
-        term_newline();
-    g_term[g_term_row][g_term_col++] = ch;
-}
-
-static void term_feed(const char *buf, int n) {
-    g_term_bytes += n;
-    for (int i = 0; i < n; i++)
-        term_putc(buf[i]);
-}
-
-static void term_init_grid(void) {
-    for (int r = 0; r < TERM_ROWS; r++)
-        for (int c = 0; c < TERM_COLS; c++)
-            g_term[r][c] = ' ';
-    g_term_row = 0;
-    g_term_col = 0;
-    g_term_esc = 0;
-}
-
-static void draw_terminal(int x, int y, int w, int h) {
-    (void)w;
-    int cx = x + 12, cy = y + 8;
-    for (int r = 0; r < TERM_ROWS && (r * 8) < h - 16; r++) {
-        char line[TERM_COLS + 1];
-        for (int c = 0; c < TERM_COLS; c++)
-            line[c] = g_term[r][c];
-        line[TERM_COLS] = 0;
-        text(cx, cy + r * 8, line, 0x9becb8, 1);
-    }
-    if (g_active == 3 && g_term_row < TERM_ROWS)
-        fill(cx + g_term_col * 8, cy + g_term_row * 8, 8, 8, 0x9becb8);
-}
-
 static void draw_content(int idx, int x, int y, int w, int h) {
-    (void)w;
     if (idx == 0) {
-        text(x + 20, y + 20, "M10b: userspace window manager", 0xcbd5e1, 1);
-        text(x + 20, y + 44, "click a title bar to focus, drag to move", 0xcbd5e1, 1);
-        text(x + 20, y + 68, "ESC exits; windows can overlap", 0xcbd5e1, 1);
+        text(x + 20, y + 20, "M10d: window manager", 0xcbd5e1, 1);
+        text(x + 20, y + 44, "drag bars, resize corners", 0xcbd5e1, 1);
+        text(x + 20, y + 68, "taskbar: focus / new terminal", 0xcbd5e1, 1);
         fill(x + 20, y + 100, w - 60, 2, 0x334155);
-        text(x + 20, y + 118, "This window is drawn by /bin/gui with", 0x94a3b8, 1);
-        text(x + 20, y + 140, "plain pixels: no toolkit, no X11.", 0x94a3b8, 1);
-        fill(x + 20, y + 180, 140, 34, 0x2563eb);
-        frame(x + 20, y + 180, 140, 34, 0x60a5fa);
-        text(x + 42, y + 191, "OK", 0xffffff, 2);
+        text(x + 20, y + 118, "Terminal windows run /bin/sh", 0x94a3b8, 1);
+        text(x + 20, y + 140, "over pipes; type in the", 0x94a3b8, 1);
+        text(x + 20, y + 162, "focused window.", 0x94a3b8, 1);
+        fill(x + 20, y + 196, 140, 34, 0x2563eb);
+        frame(x + 20, y + 196, 140, 34, 0x60a5fa);
+        text(x + 42, y + 207, "OK", 0xffffff, 2);
         return;
     }
     if (idx == 1) {
-        text(x + 18, y + 16, "kernel:  ProotOS M10b", 0xa7f3d0, 1);
+        text(x + 18, y + 16, "kernel:  ProotOS M10d", 0xa7f3d0, 1);
         text(x + 18, y + 38, "cpu:     4 x x86_64", 0xa7f3d0, 1);
         text(x + 18, y + 60, "sched:   EEVDF", 0xa7f3d0, 1);
         text(x + 18, y + 82, "input:   PS/2 aux mouse", 0xa7f3d0, 1);
-        text(x + 18, y + 104, "gui:     z-order + drag", 0xa7f3d0, 1);
+        text(x + 18, y + 104, "gui:     z-order + resize", 0xa7f3d0, 1);
         text(x + 18, y + 126, "tls:     mbedTLS + CA", 0xa7f3d0, 1);
         return;
     }
     text(x + 18, y + 16, "- click raises a window", 0xfde68a, 1);
-    text(x + 18, y + 38, "- drag the blue title bar", 0xfde68a, 1);
-    text(x + 18, y + 60, "- red X closes a window", 0xfde68a, 1);
-    text(x + 18, y + 82, "- taskbar restores it", 0xfde68a, 1);
+    text(x + 18, y + 38, "- drag the title bar", 0xfde68a, 1);
+    text(x + 18, y + 60, "- drag the lower-right", 0xfde68a, 1);
+    text(x + 18, y + 82, "  corner to resize", 0xfde68a, 1);
+    text(x + 18, y + 104, "- click +Term to open", 0xfde68a, 1);
     (void)h;
 }
-
-
 
 static void draw_window(int idx) {
     struct window *w = &g_wins[idx];
     if (!w->visible)
         return;
     int active = idx == g_active;
+    struct clip saved = g_clip;
+    int x0 = w->x, y0 = w->y, x1 = w->x + w->w, y1 = w->y + w->h;
+    if (g_clip.on) {
+        if (x0 < g_clip.x) x0 = g_clip.x;
+        if (y0 < g_clip.y) y0 = g_clip.y;
+        if (x1 > g_clip.x + g_clip.w) x1 = g_clip.x + g_clip.w;
+        if (y1 > g_clip.y + g_clip.h) y1 = g_clip.y + g_clip.h;
+    }
+    if (x0 >= x1 || y0 >= y1)
+        return;
+    g_clip.on = 1;
+    g_clip.x = x0;
+    g_clip.y = y0;
+    g_clip.w = x1 - x0;
+    g_clip.h = y1 - y0;
+
     fill(w->x + 8, w->y + 8, w->w, w->h, 0x05070c);
     fill(w->x, w->y, w->w, w->h, 0x111827);
     frame(w->x, w->y, w->w, w->h, active ? 0x3b82f6 : 0x475569);
@@ -199,32 +254,44 @@ static void draw_window(int idx) {
     text(w->x + 14, w->y + 11, w->title, 0xffffff, 1);
     fill(w->x + w->w - 26, w->y + 8, 18, 18, 0xef4444);
     text(w->x + w->w - 22, w->y + 10, "x", 0xffffff, 1);
-    if (idx == 3)
-        draw_terminal(w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
-    else
+    if (w->kind == W_TERM) {
+        if (g_terms[idx].used)
+            draw_terminal(idx, w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
+    } else {
         draw_content(idx, w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
+    }
+    /* resize grip */
+    for (int i = 0; i < 12; i++)
+        fill(w->x + w->w - 14 + i / 2, w->y + w->h - 3 - i / 2, 2, 2, 0x64748b);
+    g_clip = saved;
 }
 
 static void taskbar(void) {
     fill(0, 0, (int)g_info.width, TASKBAR_H, 0x111827);
     fill(0, TASKBAR_H, (int)g_info.width, 2, 0x2563eb);
     text(16, 12, "ProotOS M10", 0xe5e7eb, 2);
-    int bx = 230;
     for (int i = 0; i < MAX_WINS; i++) {
         struct window *w = &g_wins[i];
+        if (w->kind == W_TERM && !g_terms[i].used)
+            continue;
+        int bx = 230 + i * 126;
         uint32_t col = w->visible ? (i == g_active ? 0x1d4ed8 : 0x1f2937) : 0x111827;
-        fill(bx, 7, 150, 24, col);
-        frame(bx, 7, 150, 24, w->visible ? 0x3b82f6 : 0x374151);
-        text(bx + 10, 15, w->title, w->visible ? 0xe5e7eb : 0x6b7280, 1);
-        bx += 158;
+        fill(bx, 7, 120, 24, col);
+        frame(bx, 7, 120, 24, w->visible ? 0x3b82f6 : 0x374151);
+        text(bx + 8, 15, w->title, w->visible ? 0xe5e7eb : 0x6b7280, 1);
     }
+    fill(230 + MAX_WINS * 126, 7, 132, 24, 0x065f46);
+    frame(230 + MAX_WINS * 126, 7, 132, 24, 0x10b981);
+    text(230 + MAX_WINS * 126 + 10, 15, "+ New Terminal", 0xd1fae5, 1);
 }
 
 static void draw_scene(void) {
+    g_clip.on = 0;
     desktop();
     taskbar();
     for (int i = 0; i < MAX_WINS; i++)
-        draw_window(g_order[i]);
+        if (g_wins[g_order[i]].visible)
+            draw_window(g_order[i]);
 }
 
 static const unsigned char cursor_bits[18][12] = {
@@ -262,6 +329,8 @@ static void restore_under(int x, int y, const uint32_t *buf) {
             g_fb[(uint64_t)(y + j) * (g_info.pitch / 4) + (uint32_t)(x + i)] = buf[j * CUR_W + i];
 }
 static void draw_cursor(int x, int y) {
+    struct clip saved = g_clip;
+    g_clip.on = 0;
     for (int j = 0; j < CUR_H; j++)
         for (int i = 0; i < CUR_W; i++) {
             if (!cursor_bits[j][i])
@@ -271,6 +340,7 @@ static void draw_cursor(int x, int y) {
                         !cursor_bits[j - 1][i]);
             put(x + i, y + j, edge ? 0xffffff : 0x000000);
         }
+    g_clip = saved;
 }
 
 static void focus_top(void) {
@@ -308,19 +378,105 @@ static int hit_window(int x, int y) {
     return -1;
 }
 
+static int spawn_terminal(int x, int y, int w, int h) {
+    int slot = -1;
+    for (int i = 0; i < MAX_WINS; i++)
+        if (g_wins[i].kind == W_TERM && !g_terms[i].used) {
+            slot = i;
+            break;
+        }
+    if (slot < 0)
+        return -1;
+
+    int in_p[2], out_p[2];
+    if (pipe(in_p) != 0 || pipe(out_p) != 0)
+        return -1;
+
+    int had_fb = g_fb != 0;
+    if (had_fb)
+        fb_unmap();
+    int pid = fork();
+    if (pid == 0) {
+        dup2(in_p[0], 0);
+        dup2(out_p[1], 1);
+        dup2(out_p[1], 2);
+        close(in_p[0]);
+        close(in_p[1]);
+        close(out_p[0]);
+        close(out_p[1]);
+        for (int fd = 3; fd < 16; fd++)
+            close(fd); /* drop inherited terminals, mouse and keyboard */
+        char *sargv[] = {"sh", "stdin", 0};
+        execve("/bin/sh", sargv, 0);
+        _exit(1);
+    }
+    if (had_fb) {
+        g_fb = fb_map();
+        if (!g_fb)
+            return -1;
+    }
+    if (pid < 0) {
+        close(in_p[0]);
+        close(in_p[1]);
+        close(out_p[0]);
+        close(out_p[1]);
+        return -1;
+    }
+    close(in_p[0]);
+    close(out_p[1]);
+    term_init(slot);
+    g_terms[slot].in_fd = in_p[1];
+    g_terms[slot].out_fd = out_p[0];
+    g_terms[slot].pid = pid;
+    fcntl(g_terms[slot].out_fd, F_SETFL, O_NONBLOCK);
+
+    struct window *win = &g_wins[slot];
+    win->x = x;
+    win->y = y;
+    win->w = w;
+    win->h = h;
+    win->title = "Terminal";
+    win->kind = W_TERM;
+    win->visible = 1;
+    raise_window(slot);
+    return slot;
+}
+
+static void close_terminal(int idx) {
+    struct term_state *t = &g_terms[idx];
+    if (t->in_fd >= 0)
+        close(t->in_fd);
+    if (t->out_fd >= 0)
+        close(t->out_fd);
+    t->in_fd = t->out_fd = -1;
+    t->used = 0;
+    g_wins[idx].visible = 0;
+    focus_top();
+}
+
 static int g_drag = -1;
 static int g_drag_dx, g_drag_dy;
+static int g_resize = -1;
 
 static void handle_press(int x, int y) {
     if (y < TASKBAR_H) {
-        int bx = 230;
-        for (int i = 0; i < MAX_WINS; i++) {
-            if (x >= bx && x < bx + 150) {
-                g_wins[i].visible = 1;
-                raise_window(i);
+        if (x >= 230 + MAX_WINS * 126 && x < 230 + MAX_WINS * 126 + 132) {
+            int n = 0;
+            for (int i = 0; i < MAX_WINS; i++)
+                if (g_wins[i].kind == W_TERM && g_terms[i].used)
+                    n++;
+            int sx = 300 + (n % 3) * 40;
+            int sy = 160 + (n % 3) * 30;
+            spawn_terminal(sx, sy, 680, 360);
+            return;
+        }
+        int idx = (x - 230) / 126;
+        if (x >= 230 && idx >= 0 && idx < MAX_WINS) {
+            struct window *w = &g_wins[idx];
+            if (w->kind == W_TERM && !g_terms[idx].used)
                 return;
-            }
-            bx += 158;
+            w->visible = 1;
+            raise_window(idx);
         }
         return;
     }
@@ -331,8 +487,16 @@ static void handle_press(int x, int y) {
     struct window *w = &g_wins[idx];
     if (x >= w->x + w->w - 26 && x < w->x + w->w - 8 &&
         y >= w->y + 8 && y < w->y + 26) {
-        w->visible = 0;
-        focus_top();
+        if (w->kind == W_TERM)
+            close_terminal(idx);
+        else {
+            w->visible = 0;
+            focus_top();
+        }
+        return;
+    }
+    if (x >= w->x + w->w - 18 && y >= w->y + w->h - 18) {
+        g_resize = idx;
         return;
     }
     if (y < w->y + TITLE_H) {
@@ -357,35 +521,6 @@ int main(int argc, char **argv) {
     g_rgb = g_info.format == 0;
     int seconds = argc > 1 ? arg_int(argv[1]) : 0;
 
-    /* Start the terminal shell before mapping the framebuffer: fork copies
-     * the address space, and the fb mapping must not be cloned. */
-    term_init_grid();
-    int in_p[2], out_p[2];
-    if (pipe(in_p) == 0 && pipe(out_p) == 0) {
-        int pid = fork();
-        if (pid == 0) {
-            dup2(in_p[0], 0);
-            dup2(out_p[1], 1);
-            dup2(out_p[1], 2);
-            close(in_p[0]);
-            close(in_p[1]);
-            close(out_p[0]);
-            close(out_p[1]);
-            char *sargv[] = {"sh", "stdin", 0};
-            execve("/bin/sh", sargv, 0);
-            _exit(1);
-        }
-        if (pid > 0) {
-            close(in_p[0]);
-            close(out_p[1]);
-            g_term_in = in_p[1];
-            g_term_out = out_p[0];
-            fcntl(g_term_out, F_SETFL, O_NONBLOCK);
-        }
-    } else {
-        printf("gui: terminal pipes failed\n");
-    }
-
     g_fb = fb_map();
     if (!g_fb) {
         printf("gui: fb_map failed\n");
@@ -394,6 +529,7 @@ int main(int argc, char **argv) {
     printf("gui: framebuffer %ux%u %ubpp pitch=%u\n", g_info.width, g_info.height,
            g_info.bpp, g_info.pitch);
 
+    spawn_terminal(300, 160, 680, 360);
     draw_scene();
     int fb_ok = get(740, 460) == rgba(0x111827);
 
@@ -434,8 +570,10 @@ int main(int argc, char **argv) {
                     handle_press(cx, cy);
                     redraw = 1;
                 }
-                if (!buttons && prev_buttons)
+                if (!buttons && prev_buttons) {
                     g_drag = -1;
+                    g_resize = -1;
+                }
                 if (g_drag >= 0 && (ev.dx || ev.dy)) {
                     struct window *w = &g_wins[g_drag];
                     w->x = cx - g_drag_dx;
@@ -446,18 +584,29 @@ int main(int argc, char **argv) {
                     if (w->y + w->h > (int)g_info.height) w->y = (int)g_info.height - w->h;
                     redraw = 1;
                 }
+                if (g_resize >= 0 && (ev.dx || ev.dy)) {
+                    struct window *w = &g_wins[g_resize];
+                    w->w = cx - w->x + 2;
+                    w->h = cy - w->y + 2;
+                    if (w->w < MIN_W) w->w = MIN_W;
+                    if (w->h < MIN_H) w->h = MIN_H;
+                    if (w->x + w->w > (int)g_info.width) w->w = (int)g_info.width - w->x;
+                    if (w->y + w->h > (int)g_info.height) w->h = (int)g_info.height - w->y;
+                    redraw = 1;
+                }
             }
         }
-        if (g_term_out >= 0) {
+
+        for (int i = 0; i < MAX_WINS; i++) {
+            struct term_state *t = &g_terms[i];
+            if (g_wins[i].kind != W_TERM || !t->used || t->out_fd < 0)
+                continue;
             char tb[256];
             long tn;
-            int got = 0;
-            while ((tn = read(g_term_out, tb, sizeof(tb))) > 0) {
-                term_feed(tb, (int)tn);
-                got = 1;
-            }
-            if (got)
+            while ((tn = read(t->out_fd, tb, sizeof(tb))) > 0) {
+                term_feed(i, tb, (int)tn);
                 redraw = 1;
+            }
         }
 
         char c;
@@ -468,8 +617,11 @@ int main(int argc, char **argv) {
                     quit = 1;
                     break;
                 }
-                if (g_active == 3 && g_term_in >= 0)
-                    write(g_term_in, &c, 1);
+                if (g_active >= 0 && g_wins[g_active].kind == W_TERM) {
+                    struct term_state *t = &g_terms[g_active];
+                    if (t->used && t->in_fd >= 0)
+                        write(t->in_fd, &c, 1);
+                }
             }
         }
         if (quit)
@@ -490,17 +642,16 @@ int main(int argc, char **argv) {
     }
 
     restore_under(cx, cy, under);
-    if (g_term_in >= 0)
-        close(g_term_in);
-    if (g_term_out >= 0)
-        close(g_term_out);
+    for (int i = 0; i < MAX_WINS; i++)
+        if (g_wins[i].kind == W_TERM)
+            close_terminal(i);
     if (mfd >= 0)
         close(mfd);
     if (kfd >= 0)
         close(kfd);
     printf("gui: framebuffer check %s\n", fb_ok ? "PASS" : "FAIL");
-    printf("gui: terminal shell %s (%d bytes)\n", g_term_bytes > 0 ? "PASS" : "FAIL",
-           g_term_bytes);
+    printf("gui: terminal shell %s (%d bytes)\n", g_term_total > 0 ? "PASS" : "FAIL",
+           g_term_total);
     printf("gui: desktop drawn, %d frames, %d mouse events\n", frames, events);
     return 0;
 }

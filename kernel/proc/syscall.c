@@ -33,6 +33,7 @@
 #define SYS_NET_HTTPS 84
 #define SYS_FB_INFO 85
 #define SYS_FB_MAP 86
+#define SYS_FB_UNMAP 88
 #define SYS_PIPE 22
 #define SYS_DUP2 33
 #define SYS_FCNTL 72
@@ -123,6 +124,19 @@ static long sys_fb_map(struct process *p) {
         __asm__ volatile("invlpg (%0)" ::"r"(va) : "memory");
     }
     return (long)FB_USER_BASE;
+}
+
+static long sys_fb_unmap(struct process *p) {
+    uint64_t size = console_fb_size();
+    if (!size)
+        return -1;
+    size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    for (uint64_t off = 0; off < size; off += PAGE_SIZE) {
+        uint64_t va = FB_USER_BASE + off;
+        if (vmm_is_mapped_pml4(p->pml4_phys, va))
+            vmm_unmap_pml4(p->pml4_phys, va);
+    }
+    return 0;
 }
 
 static long sys_pipe(struct process *p, uint64_t uptr) {
@@ -364,6 +378,9 @@ void syscall_dispatch(struct trap_frame *tf) {
         break;
     case SYS_FB_MAP:
         ret = sys_fb_map(p);
+        break;
+    case SYS_FB_UNMAP:
+        ret = sys_fb_unmap(p);
         break;
     case SYS_READDIR:
         ret = sys_readdir(p, tf->rdi, (uint32_t)tf->rsi, tf->rdx, tf->r10);

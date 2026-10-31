@@ -112,13 +112,28 @@ M10c done:
 - verified by typing `ls` through QEMU `sendkey` and reading the screenshot;
   boot test asserts `gui: terminal shell PASS`.
 
-Next M10d:
+M10d done:
+
+- multiple terminal windows, each with its own pipes, shell process and
+  character grid; `+ New Terminal` in the taskbar spawns a new one;
+- new syscall `fb_unmap` (88): the GUI unmaps the framebuffer around `fork`
+  so a new terminal does not clone the 3.7 MB MMIO mapping, then remaps it;
+- window resizing by dragging the lower-right grip, with minimum size;
+- rectangle clipping for all drawing, so resized windows and terminal grids
+  never paint outside their frame;
+- draw paths clipped per window; cursor drawing bypasses the clip;
+- children close inherited descriptors (other terminals, mouse, keyboard)
+  before exec, so pipes reach EOF correctly;
+- verified with screenshots: resize, second terminal running `df /`, focus
+  switching and `ls` in the first terminal; boot test stays green.
+
+Next M10e:
 
 - damage tracking instead of full-screen redraws;
-- window resize and per-window backbuffers;
-- launcher/taskbar actions to start apps;
 - terminal scrollback and better line spacing;
-- route keyboard focus explicitly to the active window's widget.
+- per-window backbuffers and resize-aware terminal grids;
+- launcher entries beyond `+ New Terminal`; file manager and text viewer;
+- keyboard focus tied to a widget (terminal vs. buttons).
 
 ## ВЕРНУТЬСЯ: остальное
 
