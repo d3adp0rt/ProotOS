@@ -245,6 +245,10 @@ add_custom_command(
 
 file(GLOB_RECURSE INITRAMFS_FILES CONFIGURE_DEPENDS
      ${CMAKE_SOURCE_DIR}/initramfs/*)
+file(GLOB_RECURSE LIBC_HEADERS CONFIGURE_DEPENDS
+     ${CMAKE_SOURCE_DIR}/libc/include/*.h
+     ${CMAKE_SOURCE_DIR}/libc/include/sys/*.h
+     ${CMAKE_SOURCE_DIR}/third_party/tcc/include/*.h)
 
 set(USER_DIR ${CMAKE_BINARY_DIR}/user)
 file(MAKE_DIRECTORY ${USER_DIR})
@@ -471,7 +475,7 @@ add_custom_command(
             ${USER_DIR}/bin_gui ${USER_DIR}/bin_lua ${USER_DIR}/bin_tcc ${USER_DIR}/bin_hexdump
             ${USER_DIR}/bin_edit
             ${MP_BUILD}/build/firmware.elf
-            ${EXT2_IMG} ${INITRAMFS_FILES}
+            ${EXT2_IMG} ${INITRAMFS_FILES} ${LIBC_HEADERS}
     COMMENT "STAGE initramfs"
     VERBATIM)
 
