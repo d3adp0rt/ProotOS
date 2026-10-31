@@ -31,6 +31,8 @@
 #define SYS_NET_HTTP 82
 #define SYS_CLEAR 83
 #define SYS_NET_HTTPS 84
+#define SYS_FB_INFO 85
+#define SYS_FB_MAP 86
 #define SYS_PIPE 22
 #define SYS_FORK 57
 #define SYS_EXECVE 59
@@ -87,6 +89,38 @@ static long sys_read(struct process *p, int fd, uint64_t uptr, size_t len) {
             break;
     }
     return (long)done;
+}
+
+#define FB_USER_BASE 0x30000000ULL
+
+static long sys_fb_info(struct process *p, uint64_t uptr) {
+    struct fb_info info;
+    console_fb_info(&info);
+    if (info.width == 0 || info.height == 0)
+        return -1;
+    if (user_copy_to(p, uptr, &info, sizeof(info)) != 0)
+        return -14;
+    return 0;
+}
+
+static long sys_fb_map(struct process *p) {
+    uint64_t phys = console_fb_phys();
+    uint64_t size = console_fb_size();
+    if (!phys || !size || (phys & (PAGE_SIZE - 1)) != 0)
+        return -1;
+    size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    if (FB_USER_BASE + size >= USER_LIMIT)
+        return -1;
+    for (uint64_t off = 0; off < size; off += PAGE_SIZE) {
+        uint64_t va = FB_USER_BASE + off;
+        if (vmm_is_mapped_pml4(p->pml4_phys, va))
+            continue;
+        if (vmm_map_pml4(p->pml4_phys, va, phys + off,
+                         PTE_PRESENT | PTE_WRITE | PTE_USER | PTE_NX) != 0)
+            return -1;
+        __asm__ volatile("invlpg (%0)" ::"r"(va) : "memory");
+    }
+    return (long)FB_USER_BASE;
 }
 
 static long sys_pipe(struct process *p, uint64_t uptr) {
@@ -322,6 +356,12 @@ void syscall_dispatch(struct trap_frame *tf) {
         break;
     case SYS_UMOUNT:
         ret = sys_umount(p, tf->rdi);
+        break;
+    case SYS_FB_INFO:
+        ret = sys_fb_info(p, tf->rdi);
+        break;
+    case SYS_FB_MAP:
+        ret = sys_fb_map(p);
         break;
     case SYS_READDIR:
         ret = sys_readdir(p, tf->rdi, (uint32_t)tf->rsi, tf->rdx, tf->r10);

@@ -7,7 +7,7 @@
 #include <stdint.h>
 
 #define PROOT_BOOTINFO_MAGIC 0x50524f4f544f5331ULL /* "PROOTOS1" */
-#define PROOT_BOOTINFO_VERSION 1u
+#define PROOT_BOOTINFO_VERSION 2u
 #define PROOT_CMDLINE_MAX 256u
 #define PROOT_LOADER_NAME_MAX 32u
 
@@ -40,6 +40,8 @@ struct proot_bootinfo {
 
     /* Framebuffer: base is a kernel virtual address. */
     uint64_t framebuffer_base;
+    /* Physical address of the framebuffer, for user-space mapping (M10). */
+    uint64_t framebuffer_phys;
     uint64_t framebuffer_size;
     uint32_t framebuffer_width;
     uint32_t framebuffer_height;

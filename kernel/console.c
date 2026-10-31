@@ -17,6 +17,8 @@ static struct {
     uint32_t height;
     uint32_t pitch;
     uint32_t bpp;
+    uint64_t phys;
+    uint64_t size;
     uint32_t format;
     int vga;
     int scale;
@@ -177,6 +179,8 @@ void console_init(const struct proot_bootinfo *bi) {
 
     if (bi && bi->framebuffer_base && bi->framebuffer_width && bi->framebuffer_height) {
         con.fb = (uint8_t *)(uintptr_t)bi->framebuffer_base;
+        con.phys = bi->framebuffer_phys;
+        con.size = bi->framebuffer_size;
         con.width = bi->framebuffer_width;
         con.height = bi->framebuffer_height;
         con.pitch = bi->framebuffer_pitch;
@@ -193,6 +197,27 @@ void console_init(const struct proot_bootinfo *bi) {
         con.char_h = 16;
         vga_clear();
     }
+}
+
+void console_fb_info(struct fb_info *out) {
+    if (!out)
+        return;
+    memset(out, 0, sizeof(*out));
+    if (!con.fb)
+        return;
+    out->width = con.width;
+    out->height = con.height;
+    out->pitch = con.pitch;
+    out->bpp = con.bpp;
+    out->format = con.format;
+}
+
+uint64_t console_fb_phys(void) { return con.phys; }
+
+uint64_t console_fb_size(void) {
+    if (!con.fb)
+        return 0;
+    return (uint64_t)con.pitch * con.height;
 }
 
 void console_clear(void) {

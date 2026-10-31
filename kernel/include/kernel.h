@@ -18,10 +18,21 @@ void serial_init(void);
 void serial_putc(char c);
 void serial_write(const char *s);
 
+struct fb_info {
+    uint32_t width;
+    uint32_t height;
+    uint32_t pitch;
+    uint32_t bpp;
+    uint32_t format;
+};
+
 void console_init(const struct proot_bootinfo *bi);
 void console_clear(void);
 void console_putc(char c);
 void console_write(const char *s);
+void console_fb_info(struct fb_info *out);
+uint64_t console_fb_phys(void);
+uint64_t console_fb_size(void);
 
 void kprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 int ksnprintf(char *out, size_t cap, const char *fmt, ...) __attribute__((format(printf, 3, 4)));

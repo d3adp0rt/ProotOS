@@ -74,6 +74,27 @@ Still open:
 - signed registry metadata (TLS verification is now in place; package
   signatures are still missing).
 
+## M10: GUI
+
+M10a done:
+
+- bootinfo now carries the physical framebuffer base;
+- syscalls `fb_info` (85) and `fb_map` (86) map the GOP framebuffer into the
+  calling process at `0x30000000`;
+- PS/2 aux mouse driver on IRQ12, queue and `/dev/mouse` events
+  (`dx`, `dy`, buttons);
+- `/bin/gui`: userspace compositor demo with a desktop, two windows, 8x8 text,
+  shadow/border drawing, cursor save/restore (no ghosting) and ESC exit;
+- verified with QEMU `mouse_move` and framebuffer screenshots.
+
+Next M10b:
+
+- window manager: overlapping windows, z-order, drag/move, focus;
+- text console widget backed by a pipe, so the shell can run inside a window;
+- mouse clicks/buttons in the GUI (events already carry button bits);
+- launcher/taskbar actions and keyboard focus;
+- damage tracking instead of full-screen redraws.
+
 ## ВЕРНУТЬСЯ: остальное
 
 - Remote ppkg version constraints + source builds.

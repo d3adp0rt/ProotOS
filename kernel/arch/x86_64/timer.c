@@ -7,6 +7,7 @@
 #include "apic.h"
 #include "sched.h"
 #include "keyboard.h"
+#include "mouse.h"
 
 #define PIC1_CMD 0x20
 #define PIC1_DATA 0x21
@@ -81,6 +82,8 @@ void irq_dispatch(struct trap_frame *tf) {
         need_resched = sched_need_resched();
     } else if (tf->vector == 33) {
         keyboard_irq();
+    } else if (tf->vector == 44) {
+        mouse_irq();
     } else if (tf->vector != 39 && tf->vector != 47) {
         kprintf("[irq] unexpected vector %llu\n", (unsigned long long)tf->vector);
     }

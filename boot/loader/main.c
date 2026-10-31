@@ -158,6 +158,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tab
     bi->magic = PROOT_BOOTINFO_MAGIC;
     bi->version = PROOT_BOOTINFO_VERSION;
     bi->framebuffer_base = paging.fb_virt;
+    bi->framebuffer_phys = gop.fb_phys;
     bi->framebuffer_size = gop.fb_size;
     bi->framebuffer_width = gop.width;
     bi->framebuffer_height = gop.height;

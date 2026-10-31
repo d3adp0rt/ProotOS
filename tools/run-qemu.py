@@ -37,6 +37,7 @@ def main() -> int:
     ap.add_argument("--fresh-vars", action="store_true")
     ap.add_argument("--keep-disk", action="store_true")
     ap.add_argument("--pcap", default="")
+    ap.add_argument("--monitor", default="", help="HMP monitor unix socket path")
     ap.add_argument("--expect", default="",
                     help="stop QEMU once this text appears on the serial console")
     args = ap.parse_args()
@@ -74,6 +75,8 @@ def main() -> int:
     ]
     if args.pcap:
         cmd += ["-object", f"filter-dump,id=f1,netdev=net0,file={args.pcap}"]
+    if args.monitor:
+        cmd += ["-monitor", f"unix:{args.monitor},server,nowait"]
     disk = Path(args.disk)
     if disk.exists():
         run_disk = work / "data-run.img"

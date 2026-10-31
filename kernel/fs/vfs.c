@@ -11,6 +11,7 @@
 #include "ata.h"
 #include "virtio_blk.h"
 #include "keyboard.h"
+#include "mouse.h"
 
 static struct vfs_inode *g_root;
 
@@ -176,6 +177,13 @@ int vfs_read(struct vfs_inode *inode, uint64_t offset, void *buf, size_t len) {
                 return 0;
             *(char *)buf = (char)c;
             return 1;
+        }
+        if (inode->dev == 4) {
+            struct mouse_event ev;
+            if (len < sizeof(ev) || !mouse_read(&ev))
+                return 0;
+            memcpy(buf, &ev, sizeof(ev));
+            return (int)sizeof(ev);
         }
         return 0;
     }
@@ -396,6 +404,9 @@ static void make_dev(void) {
     n = vfs_create("/dev/kbd", VFS_DEV, 0444);
     if (n)
         n->dev = 3;
+    n = vfs_create("/dev/mouse", VFS_DEV, 0444);
+    if (n)
+        n->dev = 4;
 }
 
 void vfs_init(void) {

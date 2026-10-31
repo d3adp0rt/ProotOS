@@ -274,6 +274,12 @@ long net_http_get(const char *host, const char *path, char *buf, size_t cap) {
     return syscall4(82, (long)host, (long)path, (long)buf, (long)cap);
 }
 
+int fb_info(struct fb_info *out) {
+    return (int)syscall1(85, (long)out);
+}
+void *fb_map(void) {
+    return (void *)syscall0(86);
+}
 int clear_screen(void) { return (int)syscall0(83); }
 
 long net_https_get(const char *host, const char *path, char *buf, size_t cap) {
