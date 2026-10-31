@@ -52,7 +52,7 @@ int atoi(const char *s);
 struct stat { uint64_t size; uint32_t mode; uint32_t type; };
 struct statfs { uint64_t total_blocks; uint64_t free_blocks; uint32_t block_size; };
 struct fb_info { uint32_t width, height, pitch, bpp, format; };
-struct mouse_event { int16_t dx, dy; uint8_t buttons, pad; };
+struct mouse_event { int16_t dx, dy; uint8_t buttons; int8_t wheel; uint16_t pad; };
 int fb_info(struct fb_info *out);
 void *fb_map(void);
 int fb_unmap(void);

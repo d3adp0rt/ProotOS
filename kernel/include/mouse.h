@@ -10,7 +10,8 @@ struct mouse_event {
     int16_t dx;
     int16_t dy;
     uint8_t buttons;
-    uint8_t pad;
+    int8_t wheel;
+    uint16_t pad;
 };
 
 void mouse_init(void);

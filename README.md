@@ -3,7 +3,7 @@
 A from-scratch 64-bit operating system for x86_64 UEFI, built as a demo and
 research prototype. Monolithic kernel, own bootloader, own userspace.
 
-**Status: M10e — damage-tracked GUI.** The kernel brings up consoles, IDT, memory,
+**Status: M10f — files and wheel input.** The kernel brings up consoles, IDT, memory,
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
 `cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
@@ -15,11 +15,12 @@ certificate and hostname verification against a Mozilla CA bundle.
 Disk: AHCI SATA (`/dev/sda`) with virtio-blk fallback.
 GUI: `/bin/gui` maps the GOP framebuffer into user space and implements a
 small window manager: overlapping windows, z-order, focus, title-bar dragging,
-corner resizing, close buttons, clipping, damage-tracked redraws, a taskbar and
+corner resizing, close buttons, clipping, damage-tracked redraws, a taskbar,
 multiple terminal windows with scrollback, each running `/bin/sh` over its own
-pipes, with a PS/2 mouse cursor (syscalls 85/86/88/89, `/dev/mouse`).
+pipes, and a file manager with directory navigation and text preview. Input is
+a PS/2 IntelliMouse (buttons and wheel). Syscalls 85/86/88/89, `/dev/mouse`.
 
-![M10e damage tracking and scrollback](docs/screenshots/m10e-damage-scrollback.png)
+![M10f file manager](docs/screenshots/m10f-files.png)
 
 Known limitations: DHCP is marked ВЕРНУТЬСЯ (static SLIRP config), TLS 1.3 and
 Ed25519/RSA-PSS certificate chains are unsupported by mbedTLS 2.28, the CA
@@ -32,7 +33,7 @@ Package repositories:
 - https://github.com/d3adp0rt/prootos-pkg-hello
 - https://github.com/d3adp0rt/prootos-pkg-greet
 
-![status](https://img.shields.io/badge/status-M10e-blue)
+![status](https://img.shields.io/badge/status-M10f-blue)
 
 ## Requirements
 

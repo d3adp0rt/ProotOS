@@ -10,8 +10,10 @@
 static struct mouse_event g_queue[MOUSE_QUEUE];
 static volatile uint32_t g_head, g_tail;
 static spinlock_t g_lock = SPINLOCK_INIT;
-static uint8_t g_packet[3];
+static uint8_t g_packet[4];
 static int g_index;
+static int g_packet_size = 3;
+static int g_wheel;
 
 static inline uint8_t inb(uint16_t port) {
     uint8_t v;
@@ -34,6 +36,13 @@ static int wait_output_full(void) {
         if (inb(0x64) & 0x01)
             return 0;
     return -1;
+}
+
+static int mouse_read_byte(uint8_t *out) {
+    if (wait_output_full() != 0)
+        return -1;
+    *out = inb(0x60);
+    return 0;
 }
 
 static int mouse_command(uint8_t cmd) {
@@ -66,7 +75,7 @@ void mouse_irq(void) {
         if (g_index == 0 && !(b & 0x08))
             continue; /* resynchronise on the first packet byte */
         g_packet[g_index++] = b;
-        if (g_index < 3)
+        if (g_index < g_packet_size)
             continue;
         g_index = 0;
         uint8_t flags = g_packet[0];
@@ -80,7 +89,13 @@ void mouse_irq(void) {
         ev.dx = (int16_t)dx;
         ev.dy = (int16_t)(-dy); /* PS/2 Y grows upwards */
         ev.buttons = (uint8_t)(flags & 0x07);
+        ev.wheel = 0;
         ev.pad = 0;
+        if (g_wheel) {
+            int w = g_packet[3] & 0x0f;
+            if (w & 0x08) w -= 16;
+            ev.wheel = (int8_t)w;
+        }
         push(&ev);
     }
 }
@@ -100,6 +115,8 @@ int mouse_read(struct mouse_event *out) {
 void mouse_init(void) {
     g_head = g_tail = 0;
     g_index = 0;
+    g_packet_size = 3;
+    g_wheel = 0;
 
     if (wait_input_empty() != 0)
         return;
@@ -121,6 +138,18 @@ void mouse_init(void) {
     outb(0x60, cfg);
 
     mouse_command(0xf6); /* defaults */
+
+    /* IntelliMouse magic: 200/100/80 Hz then read the device id. */
+    mouse_command(0xf3); mouse_command(0xc8);
+    mouse_command(0xf3); mouse_command(0x64);
+    mouse_command(0xf3); mouse_command(0x50);
+    mouse_command(0xf2);
+    uint8_t id = 0;
+    if (mouse_read_byte(&id) == 0 && id == 3) {
+        g_wheel = 1;
+        g_packet_size = 4;
+    }
+
     mouse_command(0xf3); /* sample rate */
     mouse_command(0x64); /* 100 Hz */
     mouse_command(0xe8); /* resolution */
@@ -129,5 +158,6 @@ void mouse_init(void) {
         kprintf("[mouse] PS/2 aux init failed\n");
         return;
     }
-    kprintf("[mouse] PS/2 aux enabled (IRQ12)\n");
+    kprintf("[mouse] PS/2 aux enabled (IRQ12, %d-byte packets%s)\n", g_packet_size,
+            g_wheel ? ", wheel" : "");
 }

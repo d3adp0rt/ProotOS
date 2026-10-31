@@ -8,7 +8,7 @@
 #include "libc.h"
 #include "../third_party/fonts/font8x8_basic.h"
 
-#define MAX_WINS 6
+#define MAX_WINS 7
 #define TITLE_H 34
 #define TASKBAR_H 38
 #define TERM_COLS 78
@@ -22,8 +22,13 @@ enum {
     W_DESK = 0,
     W_SYSTEM,
     W_NOTES,
+    W_FILES,
     W_TERM,
 };
+
+#define FILES_MAX 12
+#define FILE_ROWS 24
+#define FILE_COLS 46
 
 struct term_state {
     char grid[TERM_ROWS][TERM_COLS];
@@ -50,14 +55,23 @@ static struct window g_wins[MAX_WINS] = {
     {140, 110, 560, 320, "ProotOS Desktop", 1, W_DESK},
     {420, 300, 400, 220, "System", 1, W_SYSTEM},
     {900, 120, 300, 200, "Notes", 1, W_NOTES},
+    {40, 420, 620, 270, "Files", 0, W_FILES},
     {300, 160, 680, 360, "Terminal", 0, W_TERM},
     {300, 160, 680, 360, "Terminal", 0, W_TERM},
     {300, 160, 680, 360, "Terminal", 0, W_TERM},
 };
-static int g_order[MAX_WINS] = {0, 1, 2, 3, 4, 5};
+static int g_order[MAX_WINS] = {0, 1, 2, 3, 4, 5, 6};
 static int g_active = 2;
 static struct term_state g_terms[MAX_WINS];
 static int g_term_total;
+
+static char g_files_path[256] = "/";
+static char g_files_names[FILES_MAX][64];
+static int g_files_types[FILES_MAX];
+static int g_files_count;
+static int g_files_sel = -1;
+static char g_files_preview[FILE_ROWS][FILE_COLS + 1];
+static int g_files_plines;
 
 struct clip {
     int on, x, y, w, h;
@@ -242,6 +256,145 @@ static void desktop(void) {
     }
 }
 
+static void files_join(const char *name, char *out, size_t cap) {
+    size_t n = 0;
+    const char *p = g_files_path;
+    while (*p && n + 1 < cap)
+        out[n++] = *p++;
+    if (n == 0 || out[n - 1] != '/') {
+        if (n + 1 < cap)
+            out[n++] = '/';
+    }
+    while (*name && n + 1 < cap)
+        out[n++] = *name++;
+    out[n] = 0;
+}
+
+static void files_refresh(void) {
+    g_files_count = 0;
+    g_files_sel = -1;
+    g_files_plines = 0;
+    char name[64];
+    int index = 0;
+    while (g_files_count < FILES_MAX) {
+        int r = readdir(g_files_path, (unsigned)index++, name, sizeof(name));
+        if (r < 0)
+            break;
+        if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
+            continue;
+        strcpy(g_files_names[g_files_count], name);
+        g_files_types[g_files_count] = r;
+        g_files_count++;
+    }
+}
+
+static void files_preview(const char *full) {
+    g_files_plines = 0;
+    int fd = open(full, 0, 0);
+    if (fd < 0) {
+        strcpy(g_files_preview[0], "(cannot open)");
+        g_files_plines = 1;
+        return;
+    }
+    static char buf[4096];
+    long n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0) {
+        strcpy(g_files_preview[0], "(empty)");
+        g_files_plines = 1;
+        return;
+    }
+    int line = 0, col = 0;
+    for (long i = 0; i < n && line < FILE_ROWS; i++) {
+        char c = buf[i];
+        if (c == '\r')
+            continue;
+        if (c == '\n') {
+            g_files_preview[line][col] = 0;
+            line++;
+            col = 0;
+            continue;
+        }
+        if (col < FILE_COLS)
+            g_files_preview[line][col++] = c;
+    }
+    if (line < FILE_ROWS && col > 0) {
+        g_files_preview[line][col] = 0;
+        line++;
+    }
+    g_files_plines = line;
+    if (!g_files_plines) {
+        strcpy(g_files_preview[0], "(empty)");
+        g_files_plines = 1;
+    }
+}
+
+static void files_up(void) {
+    if (strcmp(g_files_path, "/") == 0)
+        return;
+    int last = -1;
+    for (int i = 0; g_files_path[i]; i++)
+        if (g_files_path[i] == '/')
+            last = i;
+    if (last <= 0) {
+        strcpy(g_files_path, "/");
+    } else {
+        g_files_path[last] = 0;
+    }
+    files_refresh();
+}
+
+static void files_select(int idx) {
+    if (idx < 0 || idx >= g_files_count)
+        return;
+    g_files_sel = idx;
+    char full[384];
+    files_join(g_files_names[idx], full, sizeof(full));
+    if (g_files_types[idx] == 2) {
+        char tmp[256];
+        strcpy(tmp, full);
+        strcpy(g_files_path, tmp);
+        files_refresh();
+    } else {
+        files_preview(full);
+    }
+}
+
+static void files_click(int x, int y, int wx, int wy) {
+    int lx = x - wx;
+    int ly = y - wy;
+    if (lx < 8 || lx >= 212 || ly < 30)
+        return;
+    int row = (ly - 30) / 13;
+    if (row == 0)
+        files_up();
+    else if (row >= 1 && row <= g_files_count)
+        files_select(row - 1);
+}
+
+static void draw_files(int x, int y, int w, int h) {
+    (void)h;
+    text(x + 8, y + 8, g_files_path, 0x93c5fd, 1);
+    int row_y = y + 30;
+    text(x + 8, row_y, "..", 0x94a3b8, 1);
+    for (int i = 0; i < g_files_count; i++) {
+        int ry = row_y + (i + 1) * 13;
+        if (i == g_files_sel)
+            fill(x + 4, ry - 2, 204, 13, 0x1d4ed8);
+        uint32_t col = g_files_types[i] == 2 ? 0xfde68a : 0xe5e7eb;
+        char label[64];
+        strcpy(label, g_files_names[i]);
+        if (g_files_types[i] == 2)
+            strcat(label, "/");
+        text(x + 8, ry, label, col, 1);
+    }
+    fill(x + 214, y + 6, 1, h - 12, 0x334155);
+    text(x + 224, y + 8, "preview", 0x93c5fd, 1);
+    for (int i = 0; i < g_files_plines && i < FILE_ROWS; i++)
+        text(x + 224, y + 26 + i * 10, g_files_preview[i], 0xa7f3d0, 1);
+    (void)w;
+}
+
 static void draw_content(int idx, int x, int y, int w, int h) {
     if (idx == 0) {
         text(x + 20, y + 20, "M10d: window manager", 0xcbd5e1, 1);
@@ -304,6 +457,8 @@ static void draw_window(int idx) {
     if (w->kind == W_TERM) {
         if (g_terms[idx].used)
             draw_terminal(idx, w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
+    } else if (w->kind == W_FILES) {
+        draw_files(w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
     } else {
         draw_content(idx, w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
     }
@@ -321,15 +476,19 @@ static void taskbar(void) {
         struct window *w = &g_wins[i];
         if (w->kind == W_TERM && !g_terms[i].used)
             continue;
-        int bx = 230 + i * 126;
+        int bx = 230 + i * 116;
         uint32_t col = w->visible ? (i == g_active ? 0x1d4ed8 : 0x1f2937) : 0x111827;
-        fill(bx, 7, 120, 24, col);
-        frame(bx, 7, 120, 24, w->visible ? 0x3b82f6 : 0x374151);
-        text(bx + 8, 15, w->title, w->visible ? 0xe5e7eb : 0x6b7280, 1);
+        fill(bx, 7, 108, 24, col);
+        frame(bx, 7, 108, 24, w->visible ? 0x3b82f6 : 0x374151);
+        char label[13];
+        int n = 0;
+        while (w->title[n] && n < 12) { label[n] = w->title[n]; n++; }
+        label[n] = 0;
+        text(bx + 6, 15, label, w->visible ? 0xe5e7eb : 0x6b7280, 1);
     }
-    fill(230 + MAX_WINS * 126, 7, 132, 24, 0x065f46);
-    frame(230 + MAX_WINS * 126, 7, 132, 24, 0x10b981);
-    text(230 + MAX_WINS * 126 + 10, 15, "+ New Terminal", 0xd1fae5, 1);
+    fill(230 + MAX_WINS * 116, 7, 140, 24, 0x065f46);
+    frame(230 + MAX_WINS * 116, 7, 140, 24, 0x10b981);
+    text(230 + MAX_WINS * 116 + 8, 15, "+Terminal", 0xd1fae5, 1);
 }
 
 static void draw_scene_rect(int x, int y, int w, int h) {
@@ -544,7 +703,7 @@ static int g_resize = -1;
 
 static void handle_press(int x, int y) {
     if (y < TASKBAR_H) {
-        if (x >= 230 + MAX_WINS * 126 && x < 230 + MAX_WINS * 126 + 132) {
+        if (x >= 230 + MAX_WINS * 116 && x < 230 + MAX_WINS * 116 + 140) {
             int n = 0;
             for (int i = 0; i < MAX_WINS; i++)
                 if (g_wins[i].kind == W_TERM && g_terms[i].used)
@@ -554,8 +713,8 @@ static void handle_press(int x, int y) {
             spawn_terminal(sx, sy, 680, 360);
             return;
         }
-        int idx = (x - 230) / 126;
-        if (x >= 230 && idx >= 0 && idx < MAX_WINS) {
+        int idx = (x - 230) / 116;
+        if (x >= 230 && idx >= 0 && idx < MAX_WINS && x - (230 + idx * 116) < 108) {
             struct window *w = &g_wins[idx];
             if (w->kind == W_TERM && !g_terms[idx].used)
                 return;
@@ -581,6 +740,10 @@ static void handle_press(int x, int y) {
     }
     if (x >= w->x + w->w - 18 && y >= w->y + w->h - 18) {
         g_resize = idx;
+        return;
+    }
+    if (w->kind == W_FILES) {
+        files_click(x, y, w->x, w->y + TITLE_H);
         return;
     }
     if (y < w->y + TITLE_H) {
@@ -614,6 +777,7 @@ int main(int argc, char **argv) {
            g_info.bpp, g_info.pitch);
     console_gui(1); /* keep kernel logs off the GUI framebuffer */
 
+    files_refresh();
     spawn_terminal(300, 160, 680, 360);
     draw_scene_rect(0, 0, (int)g_info.width, (int)g_info.height);
     int fb_ok = get(740, 460) == rgba(0x111827);
@@ -658,6 +822,14 @@ int main(int argc, char **argv) {
                 if (!buttons && prev_buttons) {
                     g_drag = -1;
                     g_resize = -1;
+                }
+                if (ev.wheel && g_active >= 0 && g_wins[g_active].kind == W_TERM) {
+                    struct term_state *t = &g_terms[g_active];
+                    struct window *tw = &g_wins[g_active];
+                    t->offset += ev.wheel * 3;
+                    if (t->offset > t->hist_count) t->offset = t->hist_count;
+                    if (t->offset < 0) t->offset = 0;
+                    damage_add(tw->x - 8, tw->y - 8, tw->w + 16, tw->h + 16);
                 }
                 if (g_drag >= 0 && (ev.dx || ev.dy)) {
                     struct window *w = &g_wins[g_drag];

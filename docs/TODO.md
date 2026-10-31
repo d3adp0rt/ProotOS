@@ -142,12 +142,24 @@ M10e done:
 - verified by typing `ls` repeatedly, paging back, and dragging a terminal,
   with screenshots free of ghosts or console scroll damage.
 
-Next M10f:
+M10f done:
+
+- IntelliMouse negotiation (rate sequence + device id 3); 4-byte packets
+  carry the wheel; `mouse_event.wheel` reaches user space;
+- wheel scrolls the focused terminal history (PageUp/PageDown still work);
+- file manager window: lists directories via `readdir`, `..` navigation,
+  type-aware entries, click to enter directories, text preview of selected
+  files through `open`/`read`;
+- taskbar now has short labels, a Files button and `+Terminal`;
+- verified with QEMU `mouse_move ... dz`, screenshots of `/etc/motd` preview
+  and wheel-scrolled terminal history; boot test green.
+
+Next M10g:
 
 - per-window backbuffers and resize-aware terminal reflow;
-- file manager / text viewer, more launcher entries;
-- mouse wheel scrolling and terminal selection;
-- widget-level keyboard focus (terminal vs. buttons).
+- terminal text selection and copy;
+- widget-level keyboard focus (buttons, file list);
+- more launcher entries and a proper app window (text editor).
 
 ## ВЕРНУТЬСЯ: остальное
 
