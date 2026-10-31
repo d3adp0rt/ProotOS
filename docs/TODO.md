@@ -74,103 +74,34 @@ Still open:
 - signed registry metadata (TLS verification is now in place; package
   signatures are still missing).
 
-## M10: GUI
+## M10: GUI — complete
 
-M10a done:
+Delivered:
 
-- bootinfo now carries the physical framebuffer base;
-- syscalls `fb_info` (85) and `fb_map` (86) map the GOP framebuffer into the
-  calling process at `0x30000000`;
-- PS/2 aux mouse driver on IRQ12, queue and `/dev/mouse` events
-  (`dx`, `dy`, buttons);
-- `/bin/gui`: userspace compositor demo with a desktop, two windows, 8x8 text,
-  shadow/border drawing, cursor save/restore (no ghosting) and ESC exit;
-- verified with QEMU `mouse_move` and framebuffer screenshots.
+- GOP framebuffer mapped into user space (`fb_info`, `fb_map`, `fb_unmap`);
+- PS/2 IntelliMouse: buttons, motion, wheel; `/dev/mouse` events;
+- window manager: overlapping windows, z-order, focus, drag, corner resize,
+  close/taskbar restore, minimum sizes;
+- clipping and a screen backbuffer; damage rectangles for terminal output,
+  drag, resize, paging and typing; cursor save/restore without ghosts;
+- taskbar launcher: window buttons, `+Terminal`, `+Editor`;
+- terminals: multiple windows, per-window shell over pipes, scrollback,
+  resize-aware wrapping, line selection, Ctrl+C/Ctrl+V, PageUp/PageDown,
+  mouse wheel;
+- file manager: readdir navigation, `..`, keyboard navigation (arrows, Enter,
+  Backspace), text preview, Edit handoff;
+- text editor: load/save (Ctrl+S), undo (Ctrl+Z), cursor movement, scrolling,
+  paste, dirty marker;
+- kernel console is muted on the framebuffer while the GUI owns the screen;
+- extended keyboard handling: arrows, PgUp/PgDn, Ctrl combos.
 
-M10b done:
+Known post-M10 work:
 
-- overlapping windows with explicit z-order and raise-on-click;
-- title-bar dragging, close buttons and a taskbar that restores windows;
-- active-window highlighting and focus hand-off after closing;
-- click handling uses the mouse button bits from `/dev/mouse`;
-- verified with QEMU `mouse_move`/`mouse_button` and framebuffer screenshots.
+- per-window window backbuffers (currently one screen backbuffer);
+- richer text editing (word wrap, selection) and terminal search;
+- signed package metadata, DHCP, NVMe/USB/audio drivers;
+- move GUI into `/init` as the default session instead of a demo command.
 
-Fixed along the way: `wait4` had a lost-wakeup race (the child could exit
-between the zombie scan and `wait_queue_wait`), which randomly froze the boot
-demo at init; the scan and block now happen under the child wait-queue lock.
-
-M10c done:
-
-- terminal window runs `/bin/sh stdin` as a child of the GUI over two pipes;
-- new syscalls: `dup2` (33) and `fcntl` (72, `F_SETFL`/`O_NONBLOCK`);
-- descriptors 0..2 can now refer to pipes; writes to fd 1/2 use the pipe when
-  one is attached, otherwise the kernel console;
-- non-blocking pipe reads let the GUI poll shell output without blocking;
-- keyboard input is routed to the terminal only while its window is focused;
-- the GUI starts the shell before mapping the framebuffer so `fork` does not
-  clone the 3.7 MB MMIO mapping;
-- verified by typing `ls` through QEMU `sendkey` and reading the screenshot;
-  boot test asserts `gui: terminal shell PASS`.
-
-M10d done:
-
-- multiple terminal windows, each with its own pipes, shell process and
-  character grid; `+ New Terminal` in the taskbar spawns a new one;
-- new syscall `fb_unmap` (88): the GUI unmaps the framebuffer around `fork`
-  so a new terminal does not clone the 3.7 MB MMIO mapping, then remaps it;
-- window resizing by dragging the lower-right grip, with minimum size;
-- rectangle clipping for all drawing, so resized windows and terminal grids
-  never paint outside their frame;
-- draw paths clipped per window; cursor drawing bypasses the clip;
-- children close inherited descriptors (other terminals, mouse, keyboard)
-  before exec, so pipes reach EOF correctly;
-- verified with screenshots: resize, second terminal running `df /`, focus
-  switching and `ls` in the first terminal; boot test stays green.
-
-M10e done:
-
-- damage tracking: redraws use a clipped bounding box (terminal output, drag,
-  resize, paging); the desktop gradient only iterates the damaged rect;
-- terminal scrollback (300 lines) with PageUp/PageDown; live view keeps the
-  cursor, scrolled views do not;
-- extended PS/2 keys: up/down/page-up/page-down are decoded, so shell history
-  arrows work in GUI terminals;
-- better terminal line spacing (10 px rows);
-- new syscall `console_gui` (89): while the GUI owns the screen, kernel log
-  output goes to serial only, so `[proc]` messages no longer scroll the
-  framebuffer under the desktop;
-- verified by typing `ls` repeatedly, paging back, and dragging a terminal,
-  with screenshots free of ghosts or console scroll damage.
-
-M10f done:
-
-- IntelliMouse negotiation (rate sequence + device id 3); 4-byte packets
-  carry the wheel; `mouse_event.wheel` reaches user space;
-- wheel scrolls the focused terminal history (PageUp/PageDown still work);
-- file manager window: lists directories via `readdir`, `..` navigation,
-  type-aware entries, click to enter directories, text preview of selected
-  files through `open`/`read`;
-- taskbar now has short labels, a Files button and `+Terminal`;
-- verified with QEMU `mouse_move ... dz`, screenshots of `/etc/motd` preview
-  and wheel-scrolled terminal history; boot test green.
-
-M10g done:
-
-- text editor window (reuses the Notes slot): loads a file from the Files
-  preview via an Edit button, edits with printable keys, Backspace, Enter,
-  arrows/PageUp/PageDown, and saves with Ctrl+S (`unlink` + create + write);
-- editor state: 64x96 line buffer, scrolling, cursor, dirty marker (`*`);
-- keyboard driver tracks Ctrl and left/right extended keys; Ctrl+letter is
-  translated to control codes (shell and editor both benefit);
-- verified by prepending `X` to `/etc/motd`, saving, and re-reading the file
-  through the Files preview; boot test stays green.
-
-Next M10h:
-
-- per-window backbuffers and resize-aware terminal reflow;
-- terminal text selection and copy/paste;
-- widget-level keyboard focus (buttons, file list, editor vs. terminal);
-- launcher entries for apps and an editor with word wrap/undo.
 
 ## ВЕРНУТЬСЯ: остальное
 

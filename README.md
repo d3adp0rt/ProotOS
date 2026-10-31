@@ -3,7 +3,7 @@
 A from-scratch 64-bit operating system for x86_64 UEFI, built as a demo and
 research prototype. Monolithic kernel, own bootloader, own userspace.
 
-**Status: M10g — text editor.** The kernel brings up consoles, IDT, memory,
+**Status: M10 complete — userspace desktop.** The kernel brings up consoles, IDT, memory,
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
 `cp`, `mv`, `ps`, `df`. Networking: RTL8139 RX/TX, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
@@ -14,14 +14,15 @@ TLS: mbedTLS 2.28 client, TLS 1.2, multiple HTTPS sessions per boot,
 certificate and hostname verification against a Mozilla CA bundle.
 Disk: AHCI SATA (`/dev/sda`) with virtio-blk fallback.
 GUI: `/bin/gui` maps the GOP framebuffer into user space and implements a
-small window manager: overlapping windows, z-order, focus, title-bar dragging,
-corner resizing, close buttons, clipping, damage-tracked redraws, a taskbar,
-multiple terminal windows with scrollback, each running `/bin/sh` over its own
-pipes, a file manager with directory navigation and text preview, and a text
-editor with Ctrl+S save. Input is a PS/2 IntelliMouse (buttons, wheel, Ctrl
-combinations). Syscalls 85/86/88/89, `/dev/mouse`.
+desktop environment. It has overlapping windows with z-order, focus, dragging,
+corner resizing and close buttons; a screen backbuffer with damage-tracked
+clipped redraws; a taskbar launcher; multiple terminal windows with scrollback,
+wrapping, selection and copy/paste, each running `/bin/sh` over its own pipes;
+a file manager with keyboard navigation, directory browsing and text preview;
+and a text editor with undo and Ctrl+S save. Input is a PS/2 IntelliMouse
+(buttons, wheel, Ctrl combos). Syscalls 33/72/85/86/88/89, `/dev/mouse`.
 
-![M10g text editor](docs/screenshots/m10g-editor.png)
+![M10 desktop](docs/screenshots/m10-final.png)
 
 Known limitations: DHCP is marked ВЕРНУТЬСЯ (static SLIRP config), TLS 1.3 and
 Ed25519/RSA-PSS certificate chains are unsupported by mbedTLS 2.28, the CA
@@ -34,7 +35,7 @@ Package repositories:
 - https://github.com/d3adp0rt/prootos-pkg-hello
 - https://github.com/d3adp0rt/prootos-pkg-greet
 
-![status](https://img.shields.io/badge/status-M10g-blue)
+![status](https://img.shields.io/badge/status-M10-blue)
 
 ## Requirements
 

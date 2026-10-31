@@ -39,6 +39,9 @@ struct term_state {
     int row, col, esc, bytes;
     int in_fd, out_fd, pid;
     int used;
+    int sel_a, sel_b;
+    int disp_line[72];
+    int disp_count;
 };
 
 struct window {
@@ -48,9 +51,15 @@ struct window {
     int kind;
 };
 
+#define BACK_MAX_W 1280
+#define BACK_MAX_H 720
 static uint32_t *g_fb;
 static struct fb_info g_info;
 static int g_rgb;
+static uint32_t g_back[BACK_MAX_W * BACK_MAX_H];
+static uint32_t *g_draw;
+static uint32_t g_draw_stride;
+static int g_back_ok;
 
 static struct window g_wins[MAX_WINS] = {
     {140, 110, 560, 320, "ProotOS Desktop", 1, W_DESK},
@@ -74,6 +83,9 @@ static int g_files_sel = -1;
 static char g_files_preview[FILE_ROWS][FILE_COLS + 1];
 static int g_files_plines;
 static char g_files_selpath[384];
+static int g_sel_win = -1;
+static char g_clipboard[4096];
+static int g_clipboard_len;
 
 #define EDIT_LINES 64
 #define EDIT_COLS 96
@@ -84,6 +96,14 @@ static int g_edit_nlines;
 static int g_edit_cx, g_edit_cy;
 static int g_edit_scroll;
 static int g_edit_dirty;
+
+#define UNDO_DEPTH 8
+struct undo_state {
+    char lines[EDIT_LINES][EDIT_COLS];
+    int nlines, cx, cy;
+};
+static struct undo_state g_undo[UNDO_DEPTH];
+static int g_undo_count;
 
 struct clip {
     int on, x, y, w, h;
@@ -108,7 +128,7 @@ static void put(int x, int y, uint32_t rgb) {
     if (g_clip.on && (x < g_clip.x || y < g_clip.y || x >= g_clip.x + g_clip.w ||
                       y >= g_clip.y + g_clip.h))
         return;
-    g_fb[(uint64_t)y * (g_info.pitch / 4) + (uint32_t)x] = rgba(rgb);
+    g_draw[(uint64_t)y * g_draw_stride + (uint32_t)x] = rgba(rgb);
 }
 
 static uint32_t get(int x, int y) {
@@ -116,6 +136,7 @@ static uint32_t get(int x, int y) {
 }
 
 static void fill(int x, int y, int w, int h, uint32_t rgb) {
+    uint32_t v = rgba(rgb);
     int x0 = x, y0 = y, x1 = x + w, y1 = y + h;
     if (g_clip.on) {
         if (x0 < g_clip.x) x0 = g_clip.x;
@@ -129,7 +150,7 @@ static void fill(int x, int y, int w, int h, uint32_t rgb) {
     if (y1 > (int)g_info.height) y1 = (int)g_info.height;
     for (int j = y0; j < y1; j++)
         for (int i = x0; i < x1; i++)
-            g_fb[(uint64_t)j * (g_info.pitch / 4) + (uint32_t)i] = rgba(rgb);
+            g_draw[(uint64_t)j * g_draw_stride + (uint32_t)i] = v;
 }
 
 static void frame(int x, int y, int w, int h, uint32_t rgb) {
@@ -165,6 +186,8 @@ static void term_init(int idx) {
     t->in_fd = t->out_fd = -1;
     t->pid = -1;
     t->used = 1;
+    t->sel_a = t->sel_b = -1;
+    t->disp_count = 0;
 }
 
 static void term_scroll(int idx) {
@@ -226,30 +249,105 @@ static char *term_line(int idx, int line) {
     return 0;
 }
 
+static int term_len(int idx, int line) {
+    char *p = term_line(idx, line);
+    if (!p)
+        return 0;
+    int n = TERM_COLS;
+    while (n > 0 && p[n - 1] == ' ')
+        n--;
+    return n;
+}
+
+static void terminal_copy(int idx) {
+    struct term_state *t = &g_terms[idx];
+    int lo = t->sel_a, hi = t->sel_b;
+    if (lo < 0 || hi < 0)
+        return;
+    if (lo > hi) { int tmp = lo; lo = hi; hi = tmp; }
+    g_clipboard_len = 0;
+    for (int line = lo; line <= hi; line++) {
+        char *p = term_line(idx, line);
+        if (!p)
+            continue;
+        int len = term_len(idx, line);
+        for (int i = 0; i < len && g_clipboard_len < (int)sizeof(g_clipboard) - 2; i++)
+            g_clipboard[g_clipboard_len++] = p[i];
+        if (g_clipboard_len < (int)sizeof(g_clipboard) - 1)
+            g_clipboard[g_clipboard_len++] = '\n';
+    }
+    g_clipboard[g_clipboard_len] = 0;
+}
+
 static void draw_terminal(int idx, int x, int y, int w, int h) {
     struct term_state *t = &g_terms[idx];
     int cx = x + 12, cy = y + 8;
+    int cols = (w - 24) / 8;
+    if (cols < 10) cols = 10;
+    if (cols > TERM_COLS) cols = TERM_COLS;
     int rows = (h - 16) / LINE_H;
-    if (rows > TERM_ROWS)
-        rows = TERM_ROWS;
-    if (rows < 1)
-        return;
-    int top = t->hist_count + TERM_ROWS - rows - t->offset;
-    for (int r = 0; r < rows; r++) {
-        char *src = term_line(idx, top + r);
-        if (!src)
-            continue;
-        char line[TERM_COLS + 1];
-        for (int c = 0; c < TERM_COLS; c++)
-            line[c] = src[c];
-        line[TERM_COLS] = 0;
-        text(cx, cy + r * LINE_H, line, 0x9becb8, 1);
+    if (rows < 1) return;
+    if (rows > 72) rows = 72;
+
+    int last = t->hist_count + t->row;
+    long total = 0;
+    for (int line = 0; line <= last; line++) {
+        int len = term_len(idx, line);
+        int segs = (len + cols - 1) / cols;
+        if (segs < 1) segs = 1;
+        total += segs;
     }
-    if (g_active == idx && t->offset == 0 && t->row >= TERM_ROWS - rows) {
-        int dr = t->row - (TERM_ROWS - rows);
-        fill(cx + t->col * 8, cy + dr * LINE_H, 8, 8, 0x9becb8);
+    long maxoff = total - rows;
+    if (maxoff < 0) maxoff = 0;
+    if (t->offset > maxoff) t->offset = (int)maxoff;
+    if (t->offset < 0) t->offset = 0;
+    long start = total - rows - t->offset;
+    if (start < 0) start = 0;
+
+    int sel_lo = t->sel_a, sel_hi = t->sel_b;
+    if (sel_lo > sel_hi) { int tmp = sel_lo; sel_lo = sel_hi; sel_hi = tmp; }
+
+    long drow = 0;
+    int dy = 0;
+    int cur_dr = -1, cur_dc = 0;
+    t->disp_count = 0;
+    for (int line = 0; line <= last && dy < rows; line++) {
+        int len = term_len(idx, line);
+        int segs = (len + cols - 1) / cols;
+        if (segs < 1) segs = 1;
+        for (int seg = 0; seg < segs && dy < rows; seg++) {
+            if (drow < start) {
+                drow++;
+                continue;
+            }
+            int startc = seg * cols;
+            int n = len - startc;
+            if (n < 0) n = 0;
+            if (n > cols) n = cols;
+            if (sel_lo >= 0 && line >= sel_lo && line <= sel_hi)
+                fill(cx, cy + dy * LINE_H, cols * 8, 8, 0x1e3a8a);
+            if (n > 0) {
+                char tmp[TERM_COLS + 1];
+                char *src = term_line(idx, line) + startc;
+                for (int i = 0; i < n; i++)
+                    tmp[i] = src[i];
+                tmp[n] = 0;
+                text(cx, cy + dy * LINE_H, tmp, 0x9becb8, 1);
+            }
+            if (t->offset == 0 && line == last && t->col >= startc &&
+                (t->col < startc + cols || seg == segs - 1)) {
+                cur_dr = dy;
+                cur_dc = t->col - startc;
+                if (cur_dc >= cols) cur_dc = cols - 1;
+            }
+            t->disp_line[dy] = line;
+            dy++;
+            drow++;
+        }
     }
-    (void)w;
+    t->disp_count = dy;
+    if (g_active == idx && cur_dr >= 0 && cur_dr < rows)
+        fill(cx + cur_dc * 8, cy + cur_dr * LINE_H + 8, 8, 2, 0x9becb8);
 }
 
 static void desktop(void) {
@@ -421,6 +519,7 @@ static void draw_files(int x, int y, int w, int h) {
 
 #define EDIT_WIN 2
 static void raise_window(int idx);
+static void editor_ensure_visible(void);
 
 static int editor_rows(void) {
     int h = g_wins[EDIT_WIN].h - TITLE_H - 16;
@@ -441,6 +540,32 @@ static void editor_title(void) {
         strcat(g_edit_title, " *");
 }
 
+static void editor_snapshot(void) {
+    if (g_undo_count == UNDO_DEPTH) {
+        for (int i = 1; i < UNDO_DEPTH; i++)
+            g_undo[i - 1] = g_undo[i];
+        g_undo_count--;
+    }
+    struct undo_state *u = &g_undo[g_undo_count++];
+    memcpy(u->lines, g_edit_lines, sizeof(g_edit_lines));
+    u->nlines = g_edit_nlines;
+    u->cx = g_edit_cx;
+    u->cy = g_edit_cy;
+}
+
+static void editor_undo(void) {
+    if (!g_undo_count)
+        return;
+    struct undo_state *u = &g_undo[--g_undo_count];
+    memcpy(g_edit_lines, u->lines, sizeof(g_edit_lines));
+    g_edit_nlines = u->nlines;
+    g_edit_cx = u->cx;
+    g_edit_cy = u->cy;
+    g_edit_dirty = 1;
+    editor_ensure_visible();
+    editor_title();
+}
+
 static void editor_load(const char *path) {
     strcpy(g_edit_path, path);
     for (int i = 0; i < EDIT_LINES; i++)
@@ -449,6 +574,7 @@ static void editor_load(const char *path) {
     g_edit_cx = g_edit_cy = 0;
     g_edit_scroll = 0;
     g_edit_dirty = 0;
+    g_undo_count = 0;
 
     int fd = open(path, 0, 0);
     if (fd >= 0) {
@@ -524,7 +650,13 @@ static void editor_key(char c) {
         editor_save();
         return;
     }
+    if (c == 0x1a) {
+        editor_undo();
+        return;
+    }
     if (c == 8 || c == 127) {
+        if (g_edit_cx > 0 || g_edit_cy > 0)
+            editor_snapshot();
         if (g_edit_cx > 0) {
             for (int i = g_edit_cx - 1; i < len; i++)
                 cur[i] = cur[i + 1];
@@ -545,6 +677,7 @@ static void editor_key(char c) {
         }
     } else if (c == '\n' || c == '\r') {
         if (g_edit_nlines < EDIT_LINES) {
+            editor_snapshot();
             for (int i = g_edit_nlines; i > g_edit_cy + 1; i--)
                 strcpy(g_edit_lines[i], g_edit_lines[i - 1]);
             strcpy(g_edit_lines[g_edit_cy + 1], cur + g_edit_cx);
@@ -576,6 +709,7 @@ static void editor_key(char c) {
         if (g_edit_scroll > maxs) g_edit_scroll = maxs;
     } else if (c >= 32 && c < 127) {
         if (len < EDIT_COLS - 1) {
+            editor_snapshot();
             for (int i = len; i >= g_edit_cx; i--)
                 cur[i + 1] = cur[i];
             cur[g_edit_cx] = c;
@@ -607,7 +741,7 @@ static void draw_editor(int x, int y, int w, int h) {
     }
     if (g_edit_dirty)
         text(x + w - 18, y + 6, "*", 0xfbbf24, 1);
-    text(x + 12, y + h - 10, "Ctrl+S save   arrows move", 0x64748b, 1);
+    text(x + 12, y + h - 10, "Ctrl+S save  Ctrl+Z undo  arrows move", 0x64748b, 1);
 }
 
 static void editor_open(const char *path) {
@@ -625,7 +759,7 @@ static void editor_open(const char *path) {
 
 static void draw_content(int idx, int x, int y, int w, int h) {
     if (idx == 0) {
-        text(x + 20, y + 20, "M10g: window manager", 0xcbd5e1, 1);
+        text(x + 20, y + 20, "M10: window manager", 0xcbd5e1, 1);
         text(x + 20, y + 44, "drag bars, resize corners", 0xcbd5e1, 1);
         text(x + 20, y + 68, "taskbar: focus / new terminal", 0xcbd5e1, 1);
         fill(x + 20, y + 100, w - 60, 2, 0x334155);
@@ -638,7 +772,7 @@ static void draw_content(int idx, int x, int y, int w, int h) {
         return;
     }
     if (idx == 1) {
-        text(x + 18, y + 16, "kernel:  ProotOS M10g", 0xa7f3d0, 1);
+        text(x + 18, y + 16, "kernel:  ProotOS M10", 0xa7f3d0, 1);
         text(x + 18, y + 38, "cpu:     4 x x86_64", 0xa7f3d0, 1);
         text(x + 18, y + 60, "sched:   EEVDF", 0xa7f3d0, 1);
         text(x + 18, y + 82, "input:   PS/2 aux mouse", 0xa7f3d0, 1);
@@ -719,6 +853,17 @@ static void taskbar(void) {
     fill(230 + MAX_WINS * 116, 7, 140, 24, 0x065f46);
     frame(230 + MAX_WINS * 116, 7, 140, 24, 0x10b981);
     text(230 + MAX_WINS * 116 + 8, 15, "+Terminal", 0xd1fae5, 1);
+    fill(230 + MAX_WINS * 116 + 144, 7, 88, 24, 0x7c2d12);
+    frame(230 + MAX_WINS * 116 + 144, 7, 88, 24, 0xea580c);
+    text(230 + MAX_WINS * 116 + 152, 15, "+Editor", 0xffedd5, 1);
+}
+
+static void blit_back(int x, int y, int w, int h) {
+    for (int j = 0; j < h; j++) {
+        uint32_t *src = &g_back[(uint64_t)(y + j) * (uint32_t)g_info.width + x];
+        uint8_t *dst = (uint8_t *)g_fb + (uint64_t)(y + j) * g_info.pitch + (uint64_t)x * 4;
+        memcpy(dst, src, (size_t)w * 4);
+    }
 }
 
 static void draw_scene_rect(int x, int y, int w, int h) {
@@ -734,11 +879,20 @@ static void draw_scene_rect(int x, int y, int w, int h) {
     g_clip.y = y;
     g_clip.w = x1 - x;
     g_clip.h = y1 - y;
+    if (g_back_ok) {
+        g_draw = g_back;
+        g_draw_stride = g_info.width;
+    }
     desktop();
     taskbar();
     for (int i = 0; i < MAX_WINS; i++)
         if (g_wins[g_order[i]].visible)
             draw_window(g_order[i]);
+    if (g_back_ok) {
+        blit_back(x, y, x1 - x, y1 - y);
+        g_draw = g_fb;
+        g_draw_stride = g_info.pitch / 4;
+    }
     g_clip.on = 0;
 }
 
@@ -804,6 +958,8 @@ static void restore_under(int x, int y, const uint32_t *buf) {
 static void draw_cursor(int x, int y) {
     struct clip saved = g_clip;
     g_clip.on = 0;
+    g_draw = g_fb;
+    g_draw_stride = g_info.pitch / 4;
     for (int j = 0; j < CUR_H; j++)
         for (int i = 0; i < CUR_W; i++) {
             if (!cursor_bits[j][i])
@@ -933,6 +1089,10 @@ static int g_resize = -1;
 
 static void handle_press(int x, int y) {
     if (y < TASKBAR_H) {
+        if (x >= 230 + MAX_WINS * 116 + 144 && x < 230 + MAX_WINS * 116 + 232) {
+            editor_open("/untitled");
+            return;
+        }
         if (x >= 230 + MAX_WINS * 116 && x < 230 + MAX_WINS * 116 + 140) {
             int n = 0;
             for (int i = 0; i < MAX_WINS; i++)
@@ -974,6 +1134,17 @@ static void handle_press(int x, int y) {
     }
     if (w->kind == W_FILES) {
         files_click(x, y, w->x, w->y + TITLE_H, w->w, w->h - TITLE_H);
+        return;
+    }
+    if (w->kind == W_TERM && y > w->y + TITLE_H) {
+        struct term_state *t = &g_terms[idx];
+        int ly = y - (w->y + TITLE_H + 8);
+        int r = ly / LINE_H;
+        if (ly >= 0 && r >= 0 && r < t->disp_count) {
+            int line = t->disp_line[r];
+            t->sel_a = t->sel_b = line;
+            g_sel_win = idx;
+        }
         return;
     }
     if (w->kind == W_EDIT && y > w->y + TITLE_H) {
@@ -1019,6 +1190,9 @@ int main(int argc, char **argv) {
         printf("gui: fb_map failed\n");
         return 1;
     }
+    g_draw = g_fb;
+    g_draw_stride = g_info.pitch / 4;
+    g_back_ok = g_info.width <= BACK_MAX_W && g_info.height <= BACK_MAX_H;
     printf("gui: framebuffer %ux%u %ubpp pitch=%u\n", g_info.width, g_info.height,
            g_info.bpp, g_info.pitch);
     console_gui(1); /* keep kernel logs off the GUI framebuffer */
@@ -1068,6 +1242,7 @@ int main(int argc, char **argv) {
                 if (!buttons && prev_buttons) {
                     g_drag = -1;
                     g_resize = -1;
+                    g_sel_win = -1;
                 }
                 if (ev.wheel && g_active >= 0 && g_wins[g_active].kind == W_TERM) {
                     struct term_state *t = &g_terms[g_active];
@@ -1087,6 +1262,18 @@ int main(int argc, char **argv) {
                     if (w->x + w->w > (int)g_info.width) w->x = (int)g_info.width - w->w;
                     if (w->y + w->h > (int)g_info.height) w->y = (int)g_info.height - w->h;
                     damage_add(w->x - 8, w->y - 8, w->w + 16, w->h + 16);
+                }
+                if (g_sel_win >= 0 && buttons) {
+                    struct window *sw = &g_wins[g_sel_win];
+                    struct term_state *st = &g_terms[g_sel_win];
+                    int ly = cy - (sw->y + TITLE_H + 8);
+                    int r = ly / LINE_H;
+                    if (ly < 0) r = 0;
+                    if (r >= st->disp_count) r = st->disp_count - 1;
+                    if (r >= 0 && st->disp_count > 0) {
+                        st->sel_b = st->disp_line[r];
+                        damage_add(sw->x - 8, sw->y - 8, sw->w + 16, sw->h + 16);
+                    }
                 }
                 if (g_resize >= 0 && (ev.dx || ev.dy)) {
                     struct window *w = &g_wins[g_resize];
@@ -1123,8 +1310,30 @@ int main(int argc, char **argv) {
                     quit = 1;
                     break;
                 }
+                if (g_active >= 0 && g_wins[g_active].kind == W_FILES) {
+                    struct window *fw = &g_wins[g_active];
+                    if ((unsigned char)c == 0x80) {
+                        if (g_files_sel > 0) g_files_sel--;
+                        else if (g_files_sel < 0 && g_files_count > 0) g_files_sel = 0;
+                    } else if ((unsigned char)c == 0x81) {
+                        if (g_files_sel < g_files_count - 1) g_files_sel++;
+                    } else if (c == '\n' || c == '\r') {
+                        if (g_files_sel >= 0) files_select(g_files_sel);
+                    } else if (c == 8 || c == 127) {
+                        files_up();
+                    } else if (c == 'e' || c == 'E') {
+                        if (g_files_selpath[0]) editor_open(g_files_selpath);
+                    }
+                    damage_add(fw->x - 8, fw->y - 8, fw->w + 16, fw->h + 16);
+                    continue;
+                }
                 if (g_active >= 0 && g_wins[g_active].kind == W_EDIT) {
-                    editor_key(c);
+                    if ((unsigned char)c == 0x16) {
+                        for (int i = 0; i < g_clipboard_len; i++)
+                            editor_key(g_clipboard[i]);
+                    } else {
+                        editor_key(c);
+                    }
                     struct window *ew = &g_wins[g_active];
                     damage_add(ew->x - 8, ew->y - 8, ew->w + 16, ew->h + 16);
                     continue;
@@ -1132,6 +1341,16 @@ int main(int argc, char **argv) {
                 if (g_active >= 0 && g_wins[g_active].kind == W_TERM) {
                     struct term_state *t = &g_terms[g_active];
                     struct window *tw = &g_wins[g_active];
+                    if ((unsigned char)c == 0x03) {
+                        terminal_copy(g_active);
+                        damage_add(tw->x - 8, tw->y - 8, tw->w + 16, tw->h + 16);
+                        continue;
+                    }
+                    if ((unsigned char)c == 0x16) {
+                        if (g_clipboard_len > 0 && t->used && t->in_fd >= 0)
+                            write(t->in_fd, g_clipboard, (size_t)g_clipboard_len);
+                        continue;
+                    }
                     int rows = (tw->h - TITLE_H - 16) / LINE_H;
                     if (rows > TERM_ROWS) rows = TERM_ROWS;
                     if (rows < 1) rows = 1;
@@ -1149,6 +1368,7 @@ int main(int argc, char **argv) {
                     }
                     if (t->used && t->in_fd >= 0) {
                         t->offset = 0;
+                        t->sel_a = t->sel_b = -1;
                         write(t->in_fd, &c, 1);
                     }
                 }
