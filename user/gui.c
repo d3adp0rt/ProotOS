@@ -38,6 +38,7 @@ struct term_state {
     int hist_count;
     int offset;
     int row, col, esc, bytes;
+    int esc_n, esc_cur, esc_params[4];
     int in_fd, out_fd, pid;
     int used;
     int sel_a, sel_b;
@@ -183,6 +184,8 @@ static void term_init(int idx) {
         for (int c = 0; c < TERM_COLS; c++)
             t->grid[r][c] = ' ';
     t->row = t->col = t->esc = t->bytes = 0;
+    t->esc_n = t->esc_cur = 0;
+    t->esc_params[0] = t->esc_params[1] = t->esc_params[2] = t->esc_params[3] = 0;
     t->hist_count = 0;
     t->offset = 0;
     t->in_fd = t->out_fd = -1;
@@ -214,10 +217,63 @@ static void term_newline(int idx) {
         term_scroll(idx);
 }
 
+static void term_clear_screen(int idx) {
+    struct term_state *t = &g_terms[idx];
+    for (int r = 0; r < TERM_ROWS; r++)
+        for (int c = 0; c < TERM_COLS; c++)
+            t->grid[r][c] = ' ';
+    t->row = t->col = 0;
+}
+
 static void term_putc(int idx, char ch) {
     struct term_state *t = &g_terms[idx];
     if (t->esc) {
-        if (t->esc == 1 && ch == '[') { t->esc = 2; return; }
+        if (t->esc == 1) {
+            if (ch == '[') {
+                t->esc = 2;
+                t->esc_n = 0;
+                t->esc_cur = 0;
+                t->esc_params[0] = t->esc_params[1] = t->esc_params[2] = t->esc_params[3] = 0;
+            } else {
+                t->esc = 0;
+            }
+            return;
+        }
+        if (ch >= '0' && ch <= '9') {
+            t->esc_cur = t->esc_cur * 10 + (ch - '0');
+            if (t->esc_n < 4) t->esc_params[t->esc_n] = t->esc_cur;
+            return;
+        }
+        if (ch == ';') {
+            if (t->esc_n < 3) t->esc_n++;
+            t->esc_cur = 0;
+            if (t->esc_n < 4) t->esc_params[t->esc_n] = 0;
+            return;
+        }
+        if (ch == 'H' || ch == 'f') {
+            int r = t->esc_params[0] ? t->esc_params[0] : 1;
+            int c = t->esc_params[1] ? t->esc_params[1] : 1;
+            t->row = r - 1;
+            t->col = c - 1;
+            if (t->row < 0) t->row = 0;
+            if (t->col < 0) t->col = 0;
+            if (t->row >= TERM_ROWS) t->row = TERM_ROWS - 1;
+            if (t->col >= TERM_COLS) t->col = TERM_COLS - 1;
+        } else if (ch == 'J') {
+            if (t->esc_params[0] == 2)
+                term_clear_screen(idx);
+        } else if (ch == 'K') {
+            for (int c = t->col; c < TERM_COLS; c++)
+                t->grid[t->row][c] = ' ';
+        } else if (ch == 'A') {
+            if (t->row > 0) t->row--;
+        } else if (ch == 'B') {
+            if (t->row < TERM_ROWS - 1) t->row++;
+        } else if (ch == 'C') {
+            if (t->col < TERM_COLS - 1) t->col++;
+        } else if (ch == 'D') {
+            if (t->col > 0) t->col--;
+        }
         t->esc = 0;
         return;
     }

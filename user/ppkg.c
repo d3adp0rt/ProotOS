@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "libc.h"
 
 static unsigned oct(const char *p) {
@@ -81,6 +82,97 @@ static int extract_tar_to(const char *path, const char *prefix) {
 
 static int extract_tar(const char *path) { return extract_tar_to(path, ""); }
 
+/* Update only the index from the registry bundle. */
+static int extract_index(const char *path) {
+    int fd = open(path, 0, 0);
+    if (fd < 0) return 1;
+    unsigned char h[512];
+    char name[256];
+    while (read(fd, h, 512) == 512) {
+        int all_zero = 1;
+        for (int i = 0; i < 512; i++) if (h[i]) { all_zero = 0; break; }
+        if (all_zero) break;
+        int n = 0;
+        while (n < 255 && h[n]) { name[n] = (char)h[n]; n++; }
+        name[n] = 0;
+        unsigned size = oct((const char *)h + 124);
+        char type = (char)h[156];
+        unsigned pad = (512 - (size % 512)) % 512;
+        if (strcmp(name, "index") == 0 && type != '5') {
+            int out = open("/var/lib/ppkg/index", 0x242, 0644);
+            if (out < 0) { close(fd); return 1; }
+            unsigned left = size;
+            unsigned char buf[512];
+            while (left) {
+                unsigned chunk = left > sizeof(buf) ? sizeof(buf) : left;
+                long r = read(fd, buf, chunk);
+                if (r <= 0) break;
+                write(out, buf, (size_t)r);
+                left -= (unsigned)r;
+            }
+            close(out);
+            close(fd);
+            return 0;
+        }
+        unsigned skip = size + pad;
+        unsigned char tmp[512];
+        while (skip) {
+            unsigned c = skip > sizeof(tmp) ? sizeof(tmp) : skip;
+            if (read(fd, tmp, c) <= 0) break;
+            skip -= c;
+        }
+    }
+    close(fd);
+    return 1;
+}
+
+static int is_url(const char *s) {
+    return strncmp(s, "http://", 7) == 0 || strncmp(s, "https://", 8) == 0;
+}
+
+static void cache_path(const char *name, char *out, size_t cap) {
+    out[0] = 0;
+    strcat(out, "/var/lib/ppkg/packages/");
+    size_t n = strlen(out);
+    for (const char *p = name; *p && n + 1 < cap; p++) {
+        char c = *p;
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '_')
+            out[n++] = c;
+    }
+    out[n] = 0;
+    strcat(out, ".pk");
+}
+
+static int fetch_package(const char *name, const char *url, char *out_path, size_t cap) {
+    const char *p = url;
+    int https = 1;
+    if (strncmp(p, "https://", 8) == 0) p += 8;
+    else if (strncmp(p, "http://", 7) == 0) { p += 7; https = 0; }
+    char host[128];
+    size_t hn = 0;
+    while (*p && *p != '/' && hn + 1 < sizeof(host)) host[hn++] = *p++;
+    host[hn] = 0;
+    const char *path = (*p == '/') ? p : "/";
+    if (!hn) return -1;
+    char *buf = malloc(1024 * 1024);
+    if (!buf) return -1;
+    int n = -1;
+    for (int attempt = 0; attempt < 4 && n <= 0; attempt++) {
+        n = https ? net_https_get(host, path, buf, 1024 * 1024)
+                  : net_http_get(host, path, buf, 1024 * 1024);
+    }
+    if (n <= 0) { free(buf); return -1; }
+    mkdir("/var/lib/ppkg/packages", 0755);
+    cache_path(name, out_path, cap);
+    int fd = open(out_path, 0x242, 0644);
+    if (fd < 0) { free(buf); return -1; }
+    int ok = write(fd, buf, (size_t)n) == n;
+    close(fd);
+    free(buf);
+    return ok ? 0 : -1;
+}
+
 #define REGISTRY "https://github.com/d3adp0rt/prootos-registry"
 
 static int find_pkg(const char *want, char *path, size_t cap, char *deps, size_t dcap);
@@ -125,8 +217,34 @@ static int install_tree(const char *name, int depth) {
             if (install_tree(one, depth + 1) != 0) return 1;
         }
     }
-    printf("ppkg: installing %s from %s\n", name, path);
-    if (extract_tar(path) != 0) return 1;
+    char local[256];
+    const char *src = path;
+    if (is_url(path)) {
+        printf("ppkg: fetching %s\n", name);
+        if (fetch_package(name, path, local, sizeof(local)) != 0) {
+            char fallback[256];
+            snprintf(fallback, sizeof(fallback), "/packages/%s.pk", name);
+            int fd = open(fallback, 0, 0);
+            if (fd >= 0) { close(fd); strcpy(local, fallback); }
+            else { printf("ppkg: download failed for %s\n", name); return 1; }
+        }
+        src = local;
+    }
+    int probe = open(src, 0, 0);
+    if (probe < 0) {
+        char fallback[256];
+        snprintf(fallback, sizeof(fallback), "/packages/%s.pk", name);
+        probe = open(fallback, 0, 0);
+        if (probe >= 0) {
+            close(probe);
+            strcpy(local, fallback);
+            src = local;
+        }
+    } else {
+        close(probe);
+    }
+    printf("ppkg: installing %s from %s\n", name, src);
+    if (extract_tar(src) != 0) return 1;
     printf("ppkg: installed %s\n", name);
     return 0;
 }
@@ -191,15 +309,14 @@ int main(int argc, char **argv) {
         int n = -1;
         for (int attempt = 0; attempt < 5 && n <= 0; attempt++)
             n = net_https_get("raw.githubusercontent.com",
-                              "/d3adp0rt/prootos-registry/main/registry.tar", bundle, 131072);
+                              "/d3adp0rt/prootos-registry/main/index", bundle, 131072);
         if (n <= 0) { printf("ppkg: update failed (%d)\n", n); free(bundle); return 1; }
-        int fd = open("/var/lib/ppkg/registry.tar", 0x242, 0644);
+        int fd = open("/var/lib/ppkg/index", 0x242, 0644);
         if (fd < 0) { free(bundle); return 1; }
         if (write(fd, bundle, (size_t)n) != n) { close(fd); free(bundle); return 1; }
         close(fd);
         free(bundle);
-        if (extract_tar_to("/var/lib/ppkg/registry.tar", "/var/lib/ppkg/") != 0) return 1;
-        printf("ppkg: registry updated\n");
+        printf("ppkg: registry updated (index only)\n");
         return 0;
     }
     if (strcmp(argv[1], "list") == 0) {
@@ -222,7 +339,13 @@ int main(int argc, char **argv) {
             printf("ppkg: unknown package %s\n", argv[2]);
             return 1;
         }
-        if (remove_tar(path) != 0) return 1;
+        char local[256];
+        const char *src = path;
+        if (is_url(path)) {
+            cache_path(argv[2], local, sizeof(local));
+            src = local;
+        }
+        if (remove_tar(src) != 0) return 1;
         printf("ppkg: removed %s\n", argv[2]);
         return 0;
     }

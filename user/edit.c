@@ -183,16 +183,28 @@ int main(int argc, char **argv) {
         printf("usage: edit FILE\n");
         return 1;
     }
-    console_info(&g_cols, &g_rows);
-    if (g_cols < 20) g_cols = 80;
-    if (g_rows < 5) g_rows = 25;
+    /* Fit both the 80x45 kernel console and the 78x30 GUI terminal. */
+    g_cols = 78;
+    g_rows = 24;
+    int kc = 0, kr = 0;
+    if (console_info(&kc, &kr) == 0) {
+        if (kc > 0 && kc - 1 < g_cols) g_cols = kc - 1;
+        if (kr > 0 && kr - 2 < g_rows) g_rows = kr - 2;
+    }
+    if (g_cols < 20) g_cols = 20;
+    if (g_rows < 5) g_rows = 5;
     editor_load(argv[1]);
     g_cx = g_cy = g_top = 0;
     g_dirty = 0;
 
-    int kbd = open("/dev/kbd", 0, 0);
+    int kbd = 0;
+    int kbd_nonblock = 0;
+    if (fcntl(0, F_GETFL, 0) < 0) {
+        kbd = open("/dev/kbd", 0, 0);
+        kbd_nonblock = 1;
+    }
     if (kbd < 0) {
-        printf("edit: no /dev/kbd\n");
+        printf("edit: no input device\n");
         return 1;
     }
     editor_draw();
@@ -200,7 +212,10 @@ int main(int argc, char **argv) {
         char c;
         long n = read(kbd, &c, 1);
         if (n <= 0) {
-            sleep_ms(10);
+            if (kbd_nonblock)
+                sleep_ms(10);
+            else
+                break;
             continue;
         }
         unsigned char u = (unsigned char)c;
@@ -242,6 +257,7 @@ int main(int argc, char **argv) {
         editor_draw();
     }
     printf("\x1b[2J\x1b[1;1H");
-    close(kbd);
+    if (kbd > 2)
+        close(kbd);
     return 0;
 }

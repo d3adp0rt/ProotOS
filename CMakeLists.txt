@@ -414,6 +414,23 @@ add_custom_command(
     COMMENT "BUILD micropython"
     VERBATIM)
 
+add_custom_command(
+    OUTPUT ${USER_DIR}/doom_prog.o
+    COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
+        -fno-pie -fno-stack-protector -O2 -Wall -Wextra
+        -I${CMAKE_SOURCE_DIR}/libc/include
+        -c ${CMAKE_SOURCE_DIR}/initramfs/home/doom/doom.c -o ${USER_DIR}/doom_prog.o
+    DEPENDS ${CMAKE_SOURCE_DIR}/initramfs/home/doom/doom.c
+    COMMENT "CC [user] doom.c"
+    VERBATIM)
+add_custom_command(
+    OUTPUT ${USER_DIR}/bin_doom
+    COMMAND ${LD_LLD_EXECUTABLE} -Ttext=0x400000 -e _start -o ${USER_DIR}/bin_doom
+        ${LIBC_OBJS} ${USER_DIR}/doom_prog.o
+    DEPENDS ${LIBC_OBJS} ${USER_DIR}/doom_prog.o
+    COMMENT "LD [user] /home/doom/doom"
+    VERBATIM)
+
 set(INITRAMFS_STAGE ${CMAKE_BINARY_DIR}/initramfs-root)
 set(EXT2_IMG ${CMAKE_BINARY_DIR}/ext2.img)
 add_custom_command(
@@ -447,6 +464,8 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_gui ${INITRAMFS_STAGE}/bin/gui
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_hexdump ${INITRAMFS_STAGE}/bin/hexdump
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_edit ${INITRAMFS_STAGE}/bin/edit
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${INITRAMFS_STAGE}/home/doom
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_doom ${INITRAMFS_STAGE}/home/doom/doom
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_lua ${INITRAMFS_STAGE}/bin/lua
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_tcc ${INITRAMFS_STAGE}/bin/tcc
     COMMAND ${CMAKE_COMMAND} -E copy ${MP_BUILD}/build/firmware.elf ${INITRAMFS_STAGE}/bin/micropython
@@ -473,7 +492,7 @@ add_custom_command(
             ${USER_DIR}/bin_cp ${USER_DIR}/bin_mv ${USER_DIR}/bin_ps ${USER_DIR}/bin_df
             ${USER_DIR}/bin_ping ${USER_DIR}/bin_wget ${USER_DIR}/bin_ppkg ${USER_DIR}/bin_greet
             ${USER_DIR}/bin_gui ${USER_DIR}/bin_lua ${USER_DIR}/bin_tcc ${USER_DIR}/bin_hexdump
-            ${USER_DIR}/bin_edit
+            ${USER_DIR}/bin_edit ${USER_DIR}/bin_doom
             ${MP_BUILD}/build/firmware.elf
             ${EXT2_IMG} ${INITRAMFS_FILES} ${LIBC_HEADERS}
     COMMENT "STAGE initramfs"

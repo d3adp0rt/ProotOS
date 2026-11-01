@@ -6,10 +6,13 @@ research prototype. Monolithic kernel, own bootloader, own userspace.
 **Status: M11 — Lua, C and Python run in ProotOS.** The kernel brings up consoles, IDT, memory,
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
-`cp`, `mv`, `ps`, `df`, `/bin/edit` (nano-like full-screen editor). Networking: RTL8139 RX/TX, DHCP, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
-Packages: `/bin/ppkg` downloads the registry over HTTPS and installs/removes
-tar-based `.pk` packages (`update`, `list`, `search`, `install`, `remove`),
-resolving dependencies recursively (demo installs `hello`, which pulls `greet`).
+`cp`, `mv`, `ps`, `df`, `/bin/edit` (nano-like editor, works in the GUI
+terminal too), and `/home/doom/doom` (ASCII raycasting shooter with enemies,
+one pistol and three maps; source in `/home/doom/doom.c`). Networking: RTL8139 RX/TX, DHCP, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
+Packages: `/bin/ppkg` downloads a small index over HTTPS (`update`), then
+fetches package payloads on demand during `install`/dependency resolution,
+caching them under `/var/lib/ppkg/packages`; `list`, `search`, `remove` are
+supported (demo installs `hello`, pulling `greet`).
 TLS: mbedTLS 2.28 client, TLS 1.2, multiple HTTPS sessions per boot,
 certificate and hostname verification against a Mozilla CA bundle.
 Disk: AHCI SATA (`/dev/sda`) with virtio-blk fallback.

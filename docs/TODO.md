@@ -171,6 +171,11 @@ MicroPython done:
   `.py` files through the VFS; sys.path includes `/usr/share/python` and
   `/lib` (`import mathutil` demo);
 - `open()` and write support are still stubbed;
+- `/home/doom/doom` ASCII shooter (source `/home/doom/doom.c`);
+- `edit` works in the GUI terminal: the terminal emulator handles CSI
+  H/J/K/A-D and edit reads stdin when available;
+- `ppkg update` fetches only the plain `index` (178 bytes); package payloads
+  are downloaded on demand and cached;
 - libc heap is growable: 4 MiB static plus up to 32 MiB total via anonymous
   mmap chunks (up to ~16 MiB per single allocation); a 12 MiB malloc test
   lives at `/usr/share/tcc/big.c`;
