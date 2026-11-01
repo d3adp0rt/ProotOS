@@ -41,10 +41,37 @@ static int run(char *line) {
         return 1;
     }
     if (strcmp(argv[0], "help") == 0) {
-        puts("builtins: help echo cat clear history exit shutdown; external: /bin/*");
+        puts("builtins: help cd pwd mkdir rmdir touch echo cat clear history exit shutdown; external: /bin/* or relative paths");
         return 0;
     }
     if (strcmp(argv[0], "clear") == 0) { clear_screen(); return 0; }
+    if (strcmp(argv[0], "cd") == 0) {
+        const char *dir = argc > 1 ? argv[1] : "/";
+        if (chdir(dir) != 0) printf("cd: %s: no such directory\n", dir);
+        return 0;
+    }
+    if (strcmp(argv[0], "pwd") == 0) {
+        char cwd[256];
+        if (getcwd(cwd, sizeof(cwd))) printf("%s\n", cwd);
+        return 0;
+    }
+    if (strcmp(argv[0], "mkdir") == 0) {
+        if (argc < 2) { puts("mkdir: DIR"); return 0; }
+        if (mkdir(argv[1], 0755) != 0) printf("mkdir: %s: failed\n", argv[1]);
+        return 0;
+    }
+    if (strcmp(argv[0], "rmdir") == 0) {
+        if (argc < 2) { puts("rmdir: DIR"); return 0; }
+        if (unlink(argv[1]) != 0) printf("rmdir: %s: failed\n", argv[1]);
+        return 0;
+    }
+    if (strcmp(argv[0], "touch") == 0) {
+        if (argc < 2) { puts("touch: FILE"); return 0; }
+        int fd = open(argv[1], 0x242, 0644);
+        if (fd >= 0) close(fd);
+        else printf("touch: %s: failed\n", argv[1]);
+        return 0;
+    }
     if (strcmp(argv[0], "history") == 0) {
         for (int i = 0; i < 8; i++) if (g_history[i][0]) printf("%d %s\n", i + 1, g_history[i]);
         return 0;
@@ -66,8 +93,8 @@ static int run(char *line) {
                 cat_file(argv[i]);
         return 0;
     }
-    char path[64];
-    if (argv[0][0] == '/')
+    char path[256];
+    if (strchr(argv[0], '/') != 0)
         strcpy(path, argv[0]);
     else {
         strcpy(path, "/bin/");

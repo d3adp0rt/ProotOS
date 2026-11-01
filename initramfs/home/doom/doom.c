@@ -287,26 +287,26 @@ int main(void) {
                 if (!is_wall(px, ny)) py = ny;
             }
             if (k == 'a' || k == 'A') {
-                double nx = px - diry * 0.12, ny = py + dirx * 0.12;
+                double nx = px + diry * 0.12, ny = py - dirx * 0.12;
                 if (!is_wall(nx, py)) px = nx;
                 if (!is_wall(px, ny)) py = ny;
             }
             if (k == 'd' || k == 'D') {
-                double nx = px + diry * 0.12, ny = py - dirx * 0.12;
+                double nx = px - diry * 0.12, ny = py + dirx * 0.12;
                 if (!is_wall(nx, py)) px = nx;
                 if (!is_wall(px, ny)) py = ny;
             }
             if (k == 0x84 || k == '[') {
                 double ox = dirx;
-                dirx = dirx * 0.94 - diry * 0.34;
-                diry = ox * 0.34 + diry * 0.94;
+                dirx = dirx * 0.94 + diry * 0.34;
+                diry = -ox * 0.34 + diry * 0.94;
                 planex = -diry * 0.66;
                 planey = dirx * 0.66;
             }
             if (k == 0x85 || k == ']') {
                 double ox = dirx;
-                dirx = dirx * 0.94 + diry * 0.34;
-                diry = -ox * 0.34 + diry * 0.94;
+                dirx = dirx * 0.94 - diry * 0.34;
+                diry = ox * 0.34 + diry * 0.94;
                 planex = -diry * 0.66;
                 planey = dirx * 0.66;
             }

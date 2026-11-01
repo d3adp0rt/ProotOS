@@ -7,7 +7,8 @@ research prototype. Monolithic kernel, own bootloader, own userspace.
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
 `cp`, `mv`, `ps`, `df`, `/bin/edit` (nano-like editor, works in the GUI
-terminal too), and `/home/doom/doom` (ASCII raycasting shooter with enemies,
+terminal too), shell builtins `cd/pwd/mkdir/rmdir/touch`, and
+`/home/doom/doom` (ASCII raycasting shooter with enemies,
 one pistol and three maps; source in `/home/doom/doom.c`). Networking: RTL8139 RX/TX, DHCP, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.
 Packages: `/bin/ppkg` downloads a small index over HTTPS (`update`), then
 fetches package payloads on demand during `install`/dependency resolution,

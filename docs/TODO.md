@@ -171,7 +171,11 @@ MicroPython done:
   `.py` files through the VFS; sys.path includes `/usr/share/python` and
   `/lib` (`import mathutil` demo);
 - `open()` and write support are still stubbed;
-- `/home/doom/doom` ASCII shooter (source `/home/doom/doom.c`);
+- `/home/doom/doom` ASCII shooter (source `/home/doom/doom.c`), with fixed
+  arrow/A-D directions;
+- per-process cwd: relative paths resolve in the kernel, shell has
+  `cd/pwd/mkdir/rmdir/touch`, `ls` defaults to `.`, and relative binaries
+  (`./doom`) execute;
 - `edit` works in the GUI terminal: the terminal emulator handles CSI
   H/J/K/A-D and edit reads stdin when available;
 - `ppkg update` fetches only the plain `index` (178 bytes); package payloads

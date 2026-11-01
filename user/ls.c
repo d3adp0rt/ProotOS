@@ -1,6 +1,6 @@
 #include "libc.h"
 int main(int argc, char **argv) {
-    const char *path = argc > 1 ? argv[1] : "/";
+    const char *path = argc > 1 ? argv[1] : ".";
     char name[128];
     int type;
     for (unsigned i = 0;; i++) {

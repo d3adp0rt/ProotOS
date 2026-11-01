@@ -53,6 +53,7 @@ struct process {
     struct wait_queue child_wq;
     struct file *fds[PROC_MAX_FDS];
     int traced;
+    char cwd[256];
     struct process *next_all;
 };
 
@@ -69,6 +70,7 @@ int process_pipe(int out_fds[2]);
 int process_alloc_fd(struct process *p, struct file *f);
 int process_dup2(int oldfd, int newfd);
 int process_fcntl(int fd, int cmd, int arg);
+void process_resolve_path(struct process *p, const char *in, char *out, size_t cap);
 long process_read(int fd, void *buf, size_t len);
 long process_write(int fd, const void *buf, size_t len);
 int process_open(const char *path, int flags);

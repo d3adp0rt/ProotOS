@@ -40,6 +40,8 @@
 #define SYS_MPROTECT 92
 #define SYS_RTC_HMS 93
 #define SYS_CONSOLE_INFO 94
+#define SYS_CHDIR 95
+#define SYS_GETCWD 96
 #define SYS_PIPE 22
 #define SYS_DUP2 33
 #define SYS_FCNTL 72
@@ -195,11 +197,21 @@ static long sys_pipe(struct process *p, uint64_t uptr) {
     return 0;
 }
 
+static void resolve_user_path(struct process *p, char *path, size_t cap) {
+    char out[512];
+    process_resolve_path(p, path, out, sizeof(out));
+    size_t n = strlen(out);
+    if (n >= cap) n = cap - 1;
+    memcpy(path, out, n);
+    path[n] = 0;
+}
+
 static long sys_execve(struct process *p, uint64_t upath, uint64_t uargv) {
     char path[256];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
         return -14;
     path[sizeof(path) - 1] = 0;
+    resolve_user_path(p, path, sizeof(path));
 
     char *argv[16];
     int argc = 0;
@@ -223,18 +235,20 @@ static long sys_execve(struct process *p, uint64_t upath, uint64_t uargv) {
 }
 
 static long sys_open(struct process *p, uint64_t upath, int flags) {
-    char path[128];
+    char path[256];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
         return -14;
     path[sizeof(path) - 1] = 0;
+    resolve_user_path(p, path, sizeof(path));
     return process_open(path, flags);
 }
 
 static long sys_stat(struct process *p, uint64_t upath, uint64_t ustat) {
-    char path[128];
+    char path[256];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
         return -14;
     path[sizeof(path) - 1] = 0;
+    resolve_user_path(p, path, sizeof(path));
     struct vfs_stat st;
     if (vfs_stat(path, &st) != 0)
         return -2;
@@ -244,18 +258,20 @@ static long sys_stat(struct process *p, uint64_t upath, uint64_t ustat) {
 }
 
 static long sys_mkdir(struct process *p, uint64_t upath, int mode) {
-    char path[128];
+    char path[256];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
         return -14;
     path[sizeof(path) - 1] = 0;
+    resolve_user_path(p, path, sizeof(path));
     return process_mkdir(path, mode);
 }
 
 static long sys_unlink(struct process *p, uint64_t upath) {
-    char path[128];
+    char path[256];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
         return -14;
     path[sizeof(path) - 1] = 0;
+    resolve_user_path(p, path, sizeof(path));
     return process_unlink(path);
 }
 
@@ -276,11 +292,12 @@ static long sys_lseek(struct process *p, int fd, int64_t offset, int whence) {
 
 static long sys_readdir(struct process *p, uint64_t upath, uint32_t index, uint64_t uname,
                         uint64_t len) {
-    char path[128];
+    char path[256];
     char name[128];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
         return -14;
     path[sizeof(path) - 1] = 0;
+    resolve_user_path(p, path, sizeof(path));
     int type = 0;
     if (vfs_readdir(path, index, name, sizeof(name), &type) != 0)
         return -1;
@@ -305,10 +322,11 @@ static long sys_getprocs(struct process *p, uint64_t ubuf, uint64_t len) {
 }
 
 static long sys_statfs(struct process *p, uint64_t upath, uint64_t uout) {
-    char path[128];
+    char path[256];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
         return -14;
     path[sizeof(path) - 1] = 0;
+    resolve_user_path(p, path, sizeof(path));
     struct vfs_statfs st;
     if (vfs_statfs(path, &st) != 0)
         return -2;
@@ -357,15 +375,37 @@ static long sys_mount(struct process *p, uint64_t upath, uint64_t utype) {
     if (user_copy_from(p, type, utype, sizeof(type) - 1) != 0)
         return -14;
     path[sizeof(path) - 1] = type[sizeof(type) - 1] = 0;
+    resolve_user_path(p, path, sizeof(path));
     return vfs_mount(path, type);
 }
 
 static long sys_umount(struct process *p, uint64_t upath) {
-    char path[128];
+    char path[256];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
         return -14;
     path[sizeof(path) - 1] = 0;
+    resolve_user_path(p, path, sizeof(path));
     return vfs_umount(path);
+}
+
+static long sys_chdir(struct process *p, uint64_t upath) {
+    char path[256];
+    if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
+        return -14;
+    path[sizeof(path) - 1] = 0;
+    resolve_user_path(p, path, sizeof(path));
+    struct vfs_inode *inode = vfs_lookup(path);
+    if (!inode || inode->type != VFS_DIR)
+        return -2;
+    strcpy(p->cwd, path);
+    return 0;
+}
+
+static long sys_getcwd(struct process *p, uint64_t ubuf, uint64_t size) {
+    size_t n = strlen(p->cwd) + 1;
+    if (n > size)
+        return -22;
+    return user_copy_to(p, ubuf, p->cwd, n) == 0 ? 0 : -14;
 }
 
 void syscall_dispatch(struct trap_frame *tf) {
@@ -440,6 +480,12 @@ void syscall_dispatch(struct trap_frame *tf) {
         break;
     case SYS_RTC_HMS:
         ret = (long)rtc_hms();
+        break;
+    case SYS_CHDIR:
+        ret = sys_chdir(p, tf->rdi);
+        break;
+    case SYS_GETCWD:
+        ret = sys_getcwd(p, tf->rdi, tf->rsi);
         break;
     case SYS_CONSOLE_INFO: {
         int cols = 80, rows = 25;

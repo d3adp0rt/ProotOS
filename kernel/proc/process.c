@@ -56,6 +56,53 @@ struct process *process_current(void) {
     return t ? t->proc : 0;
 }
 
+void process_resolve_path(struct process *p, const char *in, char *out, size_t cap) {
+    char tmp[512];
+    if (!in || !in[0]) {
+        if (cap) { out[0] = '/'; out[1] = 0; }
+        return;
+    }
+    if (in[0] == '/') {
+        strcpy(tmp, in);
+    } else {
+        const char *cwd = (p && p->cwd[0]) ? p->cwd : "/";
+        strcpy(tmp, cwd);
+        strcat(tmp, "/");
+        strcat(tmp, in);
+    }
+    char comps[32][64];
+    int n = 0;
+    char *q = tmp;
+    while (*q) {
+        while (*q == '/') q++;
+        if (!*q) break;
+        char *start = q;
+        while (*q && *q != '/') q++;
+        size_t len = (size_t)(q - start);
+        if (len == 0) continue;
+        if (len == 1 && start[0] == '.') continue;
+        if (len == 2 && start[0] == '.' && start[1] == '.') {
+            if (n > 0) n--;
+            continue;
+        }
+        if (len > 63) len = 63;
+        if (n < 32) {
+            memcpy(comps[n], start, len);
+            comps[n][len] = 0;
+            n++;
+        }
+    }
+    out[0] = 0;
+    for (int i = 0; i < n; i++) {
+        if (strlen(out) + strlen(comps[i]) + 2 >= cap) break;
+        strcat(out, "/");
+        strcat(out, comps[i]);
+    }
+    if (!out[0]) {
+        strcpy(out, "/");
+    }
+}
+
 static int map_user_pages(struct process *p, uint64_t vaddr, uint64_t phys, uint64_t pages,
                           uint64_t flags) {
     for (uint64_t i = 0; i < pages; i++) {
@@ -190,6 +237,7 @@ int process_exec_argv(struct process *p, const char *name, char **argv, int argc
     }
 
     struct process tmp = *p;
+    strcpy(tmp.cwd, p->cwd[0] ? p->cwd : "/");
     tmp.pml4_phys = vmm_create_pml4();
     if (!tmp.pml4_phys)
         return -1;
@@ -362,6 +410,7 @@ uint32_t process_fork(struct trap_frame *tf) {
     child->entry = parent->entry;
     child->user_stack_top = parent->user_stack_top;
     child->brk = parent->brk;
+    strcpy(child->cwd, parent->cwd[0] ? parent->cwd : "/");
 
     if (vmm_copy_user_space(parent->pml4_phys, child->pml4_phys) != 0)
         return (uint32_t)-1;
@@ -453,6 +502,7 @@ struct process *process_spawn_init(void) {
     g_processes = p;
     p->child_wq.head = 0;
     p->child_wq.lock = (spinlock_t)SPINLOCK_INIT;
+    strcpy(p->cwd, "/");
 
     if (elf_load_user(p, data, size) != 0) {
         kprintf("[proc] failed to load /init ELF\n");

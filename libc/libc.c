@@ -1082,10 +1082,15 @@ int mprotect(void *addr, size_t len, int prot) {
 }
 
 char *getcwd(char *buf, size_t size) {
-    if (buf && size >= 2) { buf[0] = '/'; buf[1] = 0; return buf; }
-    return 0;
+    if (!buf || size == 0)
+        return 0;
+    if (syscall2(96, (long)buf, (long)size) != 0)
+        return 0;
+    return buf;
 }
-int chdir(const char *path) { (void)path; return 0; }
+int chdir(const char *path) {
+    return (int)syscall1(95, (long)path);
+}
 unsigned sleep(unsigned seconds) {
     sleep_ms(seconds * 1000);
     return 0;
