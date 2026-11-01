@@ -62,6 +62,8 @@ def main() -> int:
         "[mouse] PS/2 aux enabled",
         "gui: framebuffer",
         "gui: framebuffer check PASS",
+        "ProotOS 0.0.1 x86_64",
+        "Packages:",
         "Lua 5.4 on ProotOS",
         "fib: 1 1 2 3 5 8 13 21 34 55 89 144",
         "sum 1..100 = 5050",

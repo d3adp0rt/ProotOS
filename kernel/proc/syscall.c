@@ -10,6 +10,7 @@
 #include "net.h"
 #include "mm.h"
 #include "power.h"
+#include "smp.h"
 
 #define SYS_READ 0
 #define SYS_WRITE 1
@@ -42,6 +43,8 @@
 #define SYS_CONSOLE_INFO 94
 #define SYS_CHDIR 95
 #define SYS_GETCWD 96
+#define SYS_UNAME 97
+#define SYS_SYSINFO 98
 #define SYS_PIPE 22
 #define SYS_DUP2 33
 #define SYS_FCNTL 72
@@ -388,6 +391,44 @@ static long sys_umount(struct process *p, uint64_t upath) {
     return vfs_umount(path);
 }
 
+struct utsname_kernel {
+    char sysname[16];
+    char nodename[16];
+    char release[16];
+    char version[32];
+    char machine[16];
+};
+
+struct sysinfo_kernel {
+    uint64_t uptime_ms;
+    uint64_t total_kb;
+    uint64_t free_kb;
+    uint32_t ncpu;
+    uint32_t pad;
+};
+
+static long sys_uname(struct process *p, uint64_t uptr) {
+    struct utsname_kernel u;
+    memset(&u, 0, sizeof(u));
+    strcpy(u.sysname, KERNEL_NAME);
+    strcpy(u.nodename, "prootos");
+    strcpy(u.release, KERNEL_VERSION);
+    strcpy(u.version, "#1 SMP ProotOS");
+    strcpy(u.machine, "x86_64");
+    return user_copy_to(p, uptr, &u, sizeof(u)) == 0 ? 0 : -14;
+}
+
+static long sys_sysinfo(struct process *p, uint64_t uptr) {
+    struct pmm_stats st = pmm_get_stats();
+    struct sysinfo_kernel si;
+    si.uptime_ms = timer_ticks();
+    si.total_kb = st.total_pages * 4;
+    si.free_kb = st.free_pages * 4;
+    si.ncpu = smp_online_cpus();
+    si.pad = 0;
+    return user_copy_to(p, uptr, &si, sizeof(si)) == 0 ? 0 : -14;
+}
+
 static long sys_chdir(struct process *p, uint64_t upath) {
     char path[256];
     if (user_copy_from(p, path, upath, sizeof(path) - 1) != 0)
@@ -480,6 +521,12 @@ void syscall_dispatch(struct trap_frame *tf) {
         break;
     case SYS_RTC_HMS:
         ret = (long)rtc_hms();
+        break;
+    case SYS_UNAME:
+        ret = sys_uname(p, tf->rdi);
+        break;
+    case SYS_SYSINFO:
+        ret = sys_sysinfo(p, tf->rdi);
         break;
     case SYS_CHDIR:
         ret = sys_chdir(p, tf->rdi);

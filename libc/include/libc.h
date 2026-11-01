@@ -61,6 +61,22 @@ int fb_unmap(void);
 int console_gui(int on);
 unsigned rtc_hms(void);
 int console_info(int *cols, int *rows);
+struct utsname {
+    char sysname[16];
+    char nodename[16];
+    char release[16];
+    char version[32];
+    char machine[16];
+};
+struct proot_sysinfo {
+    uint64_t uptime_ms;
+    uint64_t total_kb;
+    uint64_t free_kb;
+    uint32_t ncpu;
+    uint32_t pad;
+};
+int uname(struct utsname *u);
+int proot_sysinfo(struct proot_sysinfo *si);
 int statfs(const char *path, struct statfs *st);
 int readdir(const char *path, unsigned index, char *name, size_t len);
 long getprocs(char *buf, size_t len);

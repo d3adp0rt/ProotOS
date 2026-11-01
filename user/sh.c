@@ -140,6 +140,8 @@ int main(int argc, char **argv) {
     run("ppkg remove hello");
     run("ppkg remove greet");
     run("lua /usr/share/lua/hello.lua");
+    run("uname -a");
+    run("neofetch");
     run("tcc -nostdlib -run /usr/share/tcc/hello.c");
     run("micropython /usr/share/python/hello.py");
     run("tcc -static -nostdlib -I/usr/include -o /exe.elf /usr/share/tcc/exe.c /usr/lib/prootos/libc.o /usr/lib/prootos/format.o /usr/lib/prootos/math.o /usr/src/tcc/va_list.c /usr/src/tcc/libtcc1.c");

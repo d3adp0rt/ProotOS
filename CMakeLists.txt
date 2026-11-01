@@ -305,7 +305,7 @@ add_custom_command(
 set(LIBC_OBJS ${LIBC_DIR}/crt0.o ${LIBC_DIR}/libc.o ${LIBC_DIR}/format.o
              ${LIBC_DIR}/math.o ${LIBC_DIR}/setjmp.o)
 
-foreach(prog sh echo cat ls rm cp mv ps df ping wget ppkg greet gui hexdump edit)
+foreach(prog sh echo cat ls rm cp mv ps df ping wget ppkg greet gui hexdump edit uname neofetch)
     add_custom_command(
         OUTPUT ${USER_DIR}/${prog}_prog.o
         COMMAND ${CLANG_EXECUTABLE} -target x86_64-unknown-none-elf -ffreestanding
@@ -464,6 +464,8 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_gui ${INITRAMFS_STAGE}/bin/gui
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_hexdump ${INITRAMFS_STAGE}/bin/hexdump
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_edit ${INITRAMFS_STAGE}/bin/edit
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_uname ${INITRAMFS_STAGE}/bin/uname
+    COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_neofetch ${INITRAMFS_STAGE}/bin/neofetch
     COMMAND ${CMAKE_COMMAND} -E make_directory ${INITRAMFS_STAGE}/home/doom
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_doom ${INITRAMFS_STAGE}/home/doom/doom
     COMMAND ${CMAKE_COMMAND} -E copy ${USER_DIR}/bin_lua ${INITRAMFS_STAGE}/bin/lua
@@ -492,7 +494,8 @@ add_custom_command(
             ${USER_DIR}/bin_cp ${USER_DIR}/bin_mv ${USER_DIR}/bin_ps ${USER_DIR}/bin_df
             ${USER_DIR}/bin_ping ${USER_DIR}/bin_wget ${USER_DIR}/bin_ppkg ${USER_DIR}/bin_greet
             ${USER_DIR}/bin_gui ${USER_DIR}/bin_lua ${USER_DIR}/bin_tcc ${USER_DIR}/bin_hexdump
-            ${USER_DIR}/bin_edit ${USER_DIR}/bin_doom
+            ${USER_DIR}/bin_edit ${USER_DIR}/bin_doom ${USER_DIR}/bin_uname
+            ${USER_DIR}/bin_neofetch
             ${MP_BUILD}/build/firmware.elf
             ${EXT2_IMG} ${INITRAMFS_FILES} ${LIBC_HEADERS}
     COMMENT "STAGE initramfs"

@@ -612,6 +612,13 @@ int console_gui(int on) {
 unsigned rtc_hms(void) {
     return (unsigned)syscall0(93);
 }
+int uname(struct utsname *u) {
+    return (int)syscall1(97, (long)u);
+}
+int proot_sysinfo(struct proot_sysinfo *si) {
+    return (int)syscall1(98, (long)si);
+}
+
 int console_info(int *cols, int *rows) {
     int out[2];
     if (syscall1(94, (long)out) != 0)
