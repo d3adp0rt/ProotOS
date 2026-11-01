@@ -222,6 +222,9 @@ int main(int argc, char **argv) {
             }
         }
         if (run(line)) break;
+        int rst = 0;
+        while (wait4(-1, &rst, 1, 0) > 0) {
+        }
     }
     return 0;
 }

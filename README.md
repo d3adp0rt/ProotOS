@@ -6,7 +6,7 @@ research prototype. Monolithic kernel, own bootloader, own userspace.
 **Status: M11 — Lua, C and Python run in ProotOS.** The kernel brings up consoles, IDT, memory,
 ACPI/APIC, SMP, EEVDF, ring-3 processes, VFS/ramfs/FHS, ext2, PCI, virtio-blk,
 keyboard, RTC and rtl8139. Userland: libc, `/bin/sh`, `echo`, `cat`, `ls`, `rm`,
-`cp`, `mv`, `ps`, `df`, `/bin/edit` (nano-like editor, works in the GUI
+`cp`, `mv`, `ps`, `df`, `/bin/uname`, `/bin/neofetch`, `/bin/edit` (nano-like editor, works in the GUI
 terminal too), shell builtins `cd/pwd/mkdir/rmdir/touch`, and
 `/home/doom/doom` (ASCII raycasting shooter with enemies,
 one pistol and three maps; source in `/home/doom/doom.c`). Networking: RTL8139 RX/TX, DHCP, ARP, ICMP ping, DNS, HTTP `ping`/`wget`.

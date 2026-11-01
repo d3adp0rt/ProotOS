@@ -54,6 +54,7 @@ struct process {
     struct file *fds[PROC_MAX_FDS];
     int traced;
     char cwd[256];
+    uint64_t exec_old_pml4;
     struct process *next_all;
 };
 
@@ -61,7 +62,7 @@ void process_init(void);
 struct process *process_spawn_init(void);
 struct process *process_current(void);
 uint32_t process_fork(struct trap_frame *tf);
-int process_wait(int pid, uint64_t status_uptr);
+int process_wait(int pid, uint64_t status_uptr, int options);
 int process_exec(struct process *p, const char *name);
 int process_exec_argv(struct process *p, const char *name, char **argv, int argc);
 void process_enter_user(struct process *p) __attribute__((noreturn));

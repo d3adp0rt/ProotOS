@@ -44,6 +44,8 @@ typedef struct {
 #define PF_W 2
 
 static uint32_t g_next_pid = 1;
+static struct process *g_init_proc;
+static void process_reap(struct process *p);
 static struct process *g_processes;
 
 void process_init(void) {
@@ -189,6 +191,10 @@ void process_enter_user(struct process *p) {
     p->thread = cur;
     cur->pml4_phys = p->pml4_phys;
     vmm_switch(p->pml4_phys);
+    if (p->exec_old_pml4) {
+        vmm_destroy_user_space(p->exec_old_pml4);
+        p->exec_old_pml4 = 0;
+    }
     tss_set_rsp0((uint64_t)(uintptr_t)(cur->stack + cur->stack_size));
 
     kprintf("[proc] entering user pid=%u entry=%p stack=%p\n", p->pid, (void *)p->entry,
@@ -278,6 +284,7 @@ int process_exec_argv(struct process *p, const char *name, char **argv, int argc
         tmp.user_stack_top = sp;
     }
 
+    p->exec_old_pml4 = p->pml4_phys;
     p->pml4_phys = tmp.pml4_phys;
     p->entry = tmp.entry;
     p->user_stack_top = tmp.user_stack_top;
@@ -372,6 +379,10 @@ static void fork_child_entry(void *arg) {
     p->thread = cur;
     cur->pml4_phys = p->pml4_phys;
     vmm_switch(p->pml4_phys);
+    if (p->exec_old_pml4) {
+        vmm_destroy_user_space(p->exec_old_pml4);
+        p->exec_old_pml4 = 0;
+    }
     tss_set_rsp0((uint64_t)(uintptr_t)(cur->stack + cur->stack_size));
     kprintf("[proc] fork child pid=%u\n", p->pid);
 
@@ -439,7 +450,7 @@ uint32_t process_fork(struct trap_frame *tf) {
     return child->pid;
 }
 
-int process_wait(int pid, uint64_t status_uptr) {
+int process_wait(int pid, uint64_t status_uptr, int options) {
     struct process *parent = process_current();
     if (!parent)
         return -1;
@@ -460,6 +471,11 @@ int process_wait(int pid, uint64_t status_uptr) {
             break;
         }
         if (!zombie) {
+            if (options & 1) {
+                spin_unlock(&parent->child_wq.lock);
+                irq_restore(flags);
+                return 0;
+            }
             struct thread *cur = sched_current();
             cur->state = THREAD_BLOCKED;
             cur->next = parent->child_wq.head;
@@ -477,7 +493,9 @@ int process_wait(int pid, uint64_t status_uptr) {
             if (user_copy_to(parent, status_uptr, &status, sizeof(status)) != 0)
                 return -1;
         }
-        return (int)zombie->pid;
+        int zpid = (int)zombie->pid;
+        process_reap(zombie);
+        return zpid;
     }
 }
 
@@ -494,6 +512,7 @@ struct process *process_spawn_init(void) {
         return 0;
     p->pid = __atomic_add_fetch(&g_next_pid, 1, __ATOMIC_RELAXED);
     p->ppid = 0;
+    g_init_proc = p;
     p->state = PROC_RUNNING;
     p->pml4_phys = vmm_create_pml4();
     if (!p->pml4_phys)
@@ -519,6 +538,27 @@ struct process *process_spawn_init(void) {
     return p;
 }
 
+static void process_reap(struct process *p) {
+    if (!p || p == g_init_proc)
+        return;
+    if (p->parent) {
+        struct process **pp = &p->parent->children;
+        while (*pp && *pp != p)
+            pp = &(*pp)->sibling;
+        if (*pp)
+            *pp = p->sibling;
+    }
+    struct process **gp = &g_processes;
+    while (*gp && *gp != p)
+        gp = &(*gp)->next_all;
+    if (*gp)
+        *gp = p->next_all;
+    vmm_destroy_user_space(p->pml4_phys);
+    if (p->thread)
+        sched_reclaim_thread(p->thread);
+    kfree(p);
+}
+
 void process_exit(int code) {
     struct process *p = process_current();
     if (!p)
@@ -527,12 +567,26 @@ void process_exit(int code) {
     p->exit_code = code;
     for (int i = 0; i < PROC_MAX_FDS; i++)
         process_close_fd(i);
-    if (p->parent)
-        wait_queue_wake_all(&p->parent->child_wq);
+    while (p->children) {
+        struct process *child = p->children;
+        p->children = child->sibling;
+        child->sibling = 0;
+        if (child->state == PROC_ZOMBIE) {
+            process_reap(child);
+        } else if (g_init_proc && g_init_proc != p) {
+            child->parent = g_init_proc;
+            child->sibling = g_init_proc->children;
+            g_init_proc->children = child;
+        } else {
+            child->parent = 0;
+        }
+    }
     kprintf("[proc] pid=%u exited with %d\n", p->pid, code);
     if (!p->parent) {
         kprintf("\nM7a complete: PCI, virtio-blk, block layer, ext2 on /dev/vda.\n");
     }
+    if (p->parent)
+        wait_queue_wake_all(&p->parent->child_wq);
     kthread_exit();
 }
 

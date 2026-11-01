@@ -216,6 +216,48 @@ int vmm_copy_user_space(uint64_t src_pml4, uint64_t dst_pml4) {
     return 0;
 }
 
+void vmm_destroy_user_space(uint64_t pml4_phys) {
+    if (!pml4_phys)
+        return;
+    uint64_t *pml4 = (uint64_t *)PHYS_TO_VIRT(pml4_phys);
+    for (int i = 0; i < 256; i++) {
+        if (!(pml4[i] & PTE_PRESENT))
+            continue;
+        uint64_t *pdpt = (uint64_t *)PHYS_TO_VIRT(pml4[i] & 0x000ffffffffff000ULL);
+        for (int j = 0; j < 512; j++) {
+            if (!(pdpt[j] & PTE_PRESENT))
+                continue;
+            if (pdpt[j] & PTE_PS)
+                continue;
+            uint64_t *pd = (uint64_t *)PHYS_TO_VIRT(pdpt[j] & 0x000ffffffffff000ULL);
+            for (int k = 0; k < 512; k++) {
+                if (!(pd[k] & PTE_PRESENT))
+                    continue;
+                if (pd[k] & PTE_PS) {
+                    pmm_free_pages(pd[k] & 0x000fffffffe00000ULL, 512);
+                    continue;
+                }
+                uint64_t *pt = (uint64_t *)PHYS_TO_VIRT(pd[k] & 0x000ffffffffff000ULL);
+                for (int l = 0; l < 512; l++) {
+                    uint64_t pte = pt[l];
+                    if (!(pte & PTE_PRESENT))
+                        continue;
+                    uint64_t vaddr = ((uint64_t)i << 39) | ((uint64_t)j << 30) |
+                                     ((uint64_t)k << 21) | ((uint64_t)l << 12);
+                    /* The framebuffer mapping is MMIO, not owned by the process. */
+                    if (vaddr >= 0x30000000ULL && vaddr < 0x40000000ULL)
+                        continue;
+                    pmm_free_pages(pte & 0x000ffffffffff000ULL, 1);
+                }
+                pmm_free_pages(pd[k] & 0x000ffffffffff000ULL, 1);
+            }
+            pmm_free_pages(pdpt[j] & 0x000ffffffffff000ULL, 1);
+        }
+        pmm_free_pages(pml4[i] & 0x000ffffffffff000ULL, 1);
+    }
+    pmm_free_pages(pml4_phys, 1);
+}
+
 void *vmalloc(size_t size) {
     if (size == 0)
         size = 1;

@@ -66,6 +66,7 @@ int vmm_unmap_pml4(uint64_t pml4_phys, uint64_t virt);
 int vmm_is_mapped_pml4(uint64_t pml4_phys, uint64_t virt);
 uint64_t vmm_get_phys_pml4(uint64_t pml4_phys, uint64_t virt);
 int vmm_copy_user_space(uint64_t src_pml4, uint64_t dst_pml4);
+void vmm_destroy_user_space(uint64_t pml4_phys);
 int vmm_map(uint64_t virt, uint64_t phys, uint64_t flags);
 int vmm_unmap(uint64_t virt);
 int vmm_is_mapped(uint64_t virt);

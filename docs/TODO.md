@@ -173,6 +173,11 @@ MicroPython done:
 - `open()` and write support are still stubbed;
 - `/home/doom/doom` ASCII shooter (source `/home/doom/doom.c`), with fixed
   arrow/A-D directions;
+- process reaping: `wait4` now frees zombie address spaces (user pages and
+  page tables), process structs and defers thread-stack frees to the
+  scheduler; orphaned children are reparented to init and reaped with
+  `wait4(-1, WNOHANG)` after each shell command; exec releases the old
+  address space; repeated commands keep memory flat (57 MiB after 12 runs);
 - per-process cwd: relative paths resolve in the kernel, shell has
   `cd/pwd/mkdir/rmdir/touch`, `ls` defaults to `.`, and relative binaries
   (`./doom`) execute;

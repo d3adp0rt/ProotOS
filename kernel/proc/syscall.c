@@ -583,7 +583,7 @@ void syscall_dispatch(struct trap_frame *tf) {
         ret = sys_execve(p, tf->rdi, tf->rsi);
         break;
     case SYS_WAIT4:
-        ret = process_wait((int)tf->rdi, tf->rsi);
+        ret = process_wait((int)tf->rdi, tf->rsi, (int)tf->rdx);
         break;
     case SYS_KILL:
         if ((int)tf->rdi == (int)p->pid && (int)tf->rsi == 9)

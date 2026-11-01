@@ -64,6 +64,7 @@ int sched_need_resched(void);
 void sched_maybe_resched(int need_resched);
 void schedule(void);
 struct thread *sched_current(void);
+void sched_reclaim_thread(struct thread *t);
 
 struct thread *kthread_create(void (*fn)(void *), void *arg, const char *name, int cls, int nice,
                               int rt_priority);

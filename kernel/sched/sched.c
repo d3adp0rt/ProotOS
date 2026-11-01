@@ -28,6 +28,8 @@ struct cpu {
 static struct cpu g_cpus[SCHED_MAX_CPUS];
 static struct thread g_boot_thread;
 static uint32_t g_next_tid = 1;
+static struct thread *g_dead_list;
+static spinlock_t g_dead_lock = SPINLOCK_INIT;
 
 static const uint32_t nice_weight[40] = {
     88761, 71755, 56483, 46273, 36291, 29154, 23254, 18705, 14949, 11916, 9548, 7620, 6100, 4904,
@@ -105,6 +107,46 @@ static struct thread *pick_next_locked(struct cpu *cpu) {
     return cpu->idle;
 }
 
+void sched_reclaim_thread(struct thread *t) {
+    if (!t)
+        return;
+    uint64_t flags = irq_save();
+    spin_lock(&g_dead_lock);
+    t->next = g_dead_list;
+    g_dead_list = t;
+    spin_unlock(&g_dead_lock);
+    irq_restore(flags);
+}
+
+static void sched_reap_threads(void) {
+    struct thread *free_list = 0;
+    uint64_t flags = irq_save();
+    spin_lock(&g_dead_lock);
+    struct thread **pp = &g_dead_list;
+    while (*pp) {
+        struct thread *t = *pp;
+        int busy = 0;
+        for (int i = 0; i < SCHED_MAX_CPUS; i++)
+            if (g_cpus[i].current == t)
+                busy = 1;
+        if (busy) {
+            pp = &t->next;
+        } else {
+            *pp = t->next;
+            t->next = free_list;
+            free_list = t;
+        }
+    }
+    spin_unlock(&g_dead_lock);
+    irq_restore(flags);
+    while (free_list) {
+        struct thread *t = free_list;
+        free_list = t->next;
+        kfree(t->stack);
+        kfree(t);
+    }
+}
+
 static void sched_enqueue_thread(struct thread *t) {
     if (!t)
         return;
@@ -176,6 +218,7 @@ static void idle_main(void *arg) {
 }
 
 void schedule(void) {
+    sched_reap_threads();
     uint64_t flags = irq_save();
     struct cpu *cpu = cpu_self();
     spin_lock(&cpu->lock);
