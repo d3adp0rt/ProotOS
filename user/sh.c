@@ -1,4 +1,5 @@
 #include "libc.h"
+#include <stdio.h>
 
 static void cat_file(const char *path) {
     int fd = open(path, 0, 0);
@@ -155,9 +156,14 @@ int main(int argc, char **argv) {
     }
 
     char line[1024];
+    char cwd[256];
+    char prompt[300];
     int len = 0, prev_len = 0, hist_pos = 0;
     for (;;) {
-        printf("proot> ");
+        if (!getcwd(cwd, sizeof(cwd)))
+            strcpy(cwd, "/");
+        snprintf(prompt, sizeof(prompt), "proot:%s> ", cwd);
+        printf("%s", prompt);
         len = 0;
         prev_len = 0;
         hist_pos = g_hist_count;
@@ -184,9 +190,9 @@ int main(int argc, char **argv) {
                 if (g_hist_count) {
                     strcpy(line, g_history[hist_pos]);
                     len = (int)strlen(line);
-                    printf("\rproot> %s", line);
-                    for (int i = len; i < prev_len + 8; i++) putchar(' ');
-                    printf("\rproot> %s", line);
+                    printf("\r%s%s", prompt, line);
+                    for (int i = len; i < prev_len; i++) putchar(' ');
+                    printf("\r%s%s", prompt, line);
                     prev_len = len;
                 }
                 continue;
@@ -196,9 +202,9 @@ int main(int argc, char **argv) {
                 if (hist_pos < g_hist_count) strcpy(line, g_history[hist_pos]);
                 else line[0] = 0;
                 len = (int)strlen(line);
-                printf("\rproot> %s", line);
-                for (int i = len; i < prev_len + 8; i++) putchar(' ');
-                printf("\rproot> %s", line);
+                printf("\r%s%s", prompt, line);
+                for (int i = len; i < prev_len; i++) putchar(' ');
+                printf("\r%s%s", prompt, line);
                 prev_len = len;
                 continue;
             }

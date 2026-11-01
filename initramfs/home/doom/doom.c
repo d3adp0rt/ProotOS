@@ -153,9 +153,11 @@ static void render(void) {
         int end = start + lh;
         if (start < 0) start = 0;
         if (end > VIEW_H) end = VIEW_H;
-        char wall = side ? '|' : '#';
-        if (dist > 12.0) wall = '.';
-        else if (dist > 7.0) wall = ':';
+        static const char *grad0 = "@#%*+=-:.";
+        static const char *grad1 = "|!I%+=-:.";
+        int lvl = (int)(dist * 1.5);
+        if (lvl > 8) lvl = 8;
+        char wall = (side ? grad1 : grad0)[lvl];
         for (int y = start; y < end; y++)
             screen[y][x] = wall;
     }
@@ -176,6 +178,50 @@ static void render(void) {
             if (sx + 1 < term_w) screen[sy][sx + 1] = ']';
         }
     }
+    /* minimap, bottom-right */
+    int mw = 18, mh = 8;
+    int ox = term_w - mw;
+    int oy = VIEW_H - mh;
+    if (ox > 0 && oy > 0) {
+        for (int yy = 0; yy < mh; yy++) {
+            for (int xx = 0; xx < mw; xx++) {
+                int mx = (int)px - mw / 2 + xx;
+                int my = (int)py - mh / 2 + yy;
+                char c = '.';
+                if (mx >= 0 && my >= 0 && mx < map_w && my < map_h) {
+                    c = grid[my][mx];
+                    if (c == '#' || c == '=') c = '#';
+                    else if (c == 'X') c = 'X';
+                    else c = '.';
+                } else {
+                    c = ' ';
+                }
+                if (mx == (int)px && my == (int)py) c = '@';
+                for (int e = 0; e < enemy_count; e++) {
+                    if (enemies[e].alive && (int)enemies[e].x == mx &&
+                        (int)enemies[e].y == my)
+                        c = 'e';
+                }
+                screen[oy + yy][ox + xx] = c;
+            }
+        }
+    }
+    /* weapon sprite */
+    static const char *gun[] = {
+        "   __   ",
+        "  /  \\  ",
+        " | () | ",
+        " |____| ",
+        "  /  \\  ",
+    };
+    int gx = term_w / 2 - 4;
+    int gy = VIEW_H - 5;
+    for (int r = 0; r < 5; r++) {
+        for (int c = 0; gun[r][c] && c < 8; c++)
+            screen[gy + r][gx + c] = gun[r][c];
+    }
+    if (VIEW_H > 3)
+        screen[VIEW_H / 2][term_w / 2] = '+';
 }
 
 static void draw(void) {
@@ -241,7 +287,6 @@ static void update_enemies(void) {
 }
 
 static int input_fd = 0;
-static int input_nonblock;
 
 static int getkey(void) {
     char c;
@@ -257,7 +302,6 @@ int main(void) {
     term_w = 78;
     if (fcntl(0, F_GETFL, 0) < 0) {
         input_fd = open("/dev/kbd", 0, 0);
-        input_nonblock = 1;
     } else {
         fcntl(0, F_SETFL, O_NONBLOCK);
     }
